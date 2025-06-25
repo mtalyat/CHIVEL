@@ -1,6 +1,6 @@
-# Computer-Human Interface Scripting Language
-CHISL is a scripting language for controlling your device. It harnesses the power of computer vision to dynamically identify and interact with the elements on your screen.
+# CHIVEL
 
+<<<<<<< Updated upstream
 Check out the [Wiki](https://github.com/mtalyat/Computer-Human-Interface-Scripting-Language/wiki) for an installation guide, and more.
 
 ## Features
@@ -115,16 +115,18 @@ There are some constants that are built into CHISL and controlled by the program
 | `RESULT` | Holds the string of the result from the most recently ran command, if applicable. |
 | `PASS_COUNT` | The number of passes from `Test` commands that have been ran. |
 | `FAIL_COUNT` | The number of fails from `Test` commands that have been ran. |
+=======
+CHIVEL, previously known as CHISL (Computer-Human Interaction Scripting Language) is a Python extension meant for controlling your device. It provides simple interfaces for finding things on the screen, controlling the keyboard/mouse, and more. This was originally its own scripting language, but was later revamped into a Python module, so that the powerful features of Python could be used in addition to the computer vision that CHIVEL provides. The project was also renamed from CHISL to CHIVEL, as CHISL was already taken on PyPI...
+>>>>>>> Stashed changes
 
 ### Example
-    Capture screen.
-    Load windowsIcon from "windows.png".
-    Find match by windowsIcon in screen.
-    Draw match on screen.
-    Save screen to "found_it.png".
-    Print "Found it!".
-    Move mouse to match.
-    Click mouse left.
+
+    import chivel
+    x = chivel.load("x.png")
+    screen = chivel.capture(0)
+    matches = chivel.find(screen, x)
+    chivel.mouse_move(matches[0])
+    chivel.mouse_click()
 
 ## Technologies
 C++, OpenCV, and Tesseract OCR.
