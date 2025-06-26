@@ -79,19 +79,15 @@ def record(output_path, simplify, stop_key=123):  # 123 is F12
     mouse_listener.start()
     keyboard_listener.start()
 
-    print(f"Recording... Press the stop key to stop.")
     stop_flag.wait()
     mouse_listener.stop()
     keyboard_listener.stop()
-    print("Recording stopped.")
 
     if simplify > 0:
-        print(f"Simplifying actions ({simplify})...")
         simplify_move = (simplify & SIMPLIFY_MOVE) != 0
         simplify_click = (simplify & SIMPLIFY_CLICK) != 0
         simplify_type = (simplify & SIMPLIFY_TYPE) != 0
         simplify_time = (simplify & SIMPLIFY_TIME) != 0
-        print(f"Simplifying moves: {simplify_move}, clicks: {simplify_click}, typing: {simplify_type}, time: {simplify_time}")
         oldActions = actions
         actions = []
         actions.append((0, ACTION_NONE, ()))
@@ -158,45 +154,41 @@ def record(output_path, simplify, stop_key=123):  # 123 is F12
 
         # remove any ACTION_NONE entries
         actions = [a for a in actions if a[1] != ACTION_NONE]
-    else:
-        print("Skipping simplification.")
 
     with open(output_path, 'w', encoding='utf-8') as f:
-        f.write("import chivel\n\n")
-        f.write("def replay():\n")
+        f.write("import chivel as c\n\n")
+        f.write("def play():\n")
         last_time = 0
         for t, action, params in actions:
             if action == ACTION_NONE:
                 continue
             wait = t - last_time - 0.001
             if wait >= 0.001:
-                f.write(f"    chivel.wait({wait:.3f})\n")
+                f.write(f"    c.wait({wait:.3f})\n")
             if action == ACTION_MOUSE_MOVE:
-                f.write(f"    chivel.mouse_move({params[0]}, ({params[1]}, {params[2]}))\n")
+                f.write(f"    c.mouse_move({params[0]}, ({params[1]}, {params[2]}))\n")
             elif action == ACTION_MOUSE_DOWN:
                 btn = 0 if params[2] == 'left' else 1 if params[2] == 'right' else 2
-                f.write(f"    chivel.mouse_down({btn})\n")
+                f.write(f"    c.mouse_down({btn})\n")
             elif action == ACTION_MOUSE_UP:
                 btn = 0 if params[2] == 'left' else 1 if params[2] == 'right' else 2
-                f.write(f"    chivel.mouse_up({btn})\n")
+                f.write(f"    c.mouse_up({btn})\n")
             elif action == ACTION_MOUSE_CLICK:
                 btn = 0 if params[2] == 'left' else 1 if params[2] == 'right' else 2
-                f.write(f"    chivel.mouse_click({btn})\n")
+                f.write(f"    c.mouse_click({btn})\n")
             elif action == ACTION_MOUSE_SCROLL:
-                f.write(f"    chivel.mouse_scroll({params[1]}, {params[0]})\n")
+                f.write(f"    c.mouse_scroll({params[1]}, {params[0]})\n")
             elif action == ACTION_KEY_DOWN:
                 if params[0] != stop_key:
-                    f.write(f"    chivel.key_down({params[0]})\n")
+                    f.write(f"    c.key_down({params[0]})\n")
             elif action == ACTION_KEY_UP:
                 if params[0] != stop_key:
-                    f.write(f"    chivel.key_up({params[0]})\n")
+                    f.write(f"    c.key_up({params[0]})\n")
             elif action == ACTION_KEY_CLICK:
                 if params[0] != stop_key:
-                    f.write(f"    chivel.key_click({params[0]}, count={params[2]})\n")
+                    f.write(f"    c.key_click({params[0]}, count={params[2]})\n")
             elif action == ACTION_TYPE:
                 text = params[0].replace("'", "\\'").replace('\n', '\\n')
-                f.write(f"    chivel.type('{text}', wait=0.05)\n")
+                f.write(f"    c.type('{text}', wait=0.05)\n")
             last_time = t
-        f.write("\nif __name__ == '__main__':\n    replay()\n")
-
-    print(f"Recording saved to {output_path}")
+        f.write("\nif __name__ == '__main__':\n    play()\n")

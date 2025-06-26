@@ -191,6 +191,62 @@ namespace chivel
         search->index++;
         return TRUE; // Continue enumeration
     }
+
+    bool run_python_play_function(const std::string& script_path, const std::string& play_func_name = "play")
+    {
+        // Initialize Python if needed
+        if (!Py_IsInitialized())
+            Py_Initialize();
+
+        // Extract directory and module name
+        std::filesystem::path path(script_path);
+        std::filesystem::path dir = path.parent_path();
+        std::filesystem::path stem = path.stem(); // filename without extension
+
+        // Convert to UTF-8 for Python API
+        std::string dir_utf8 = std::filesystem::path(dir).string();
+        std::string mod_utf8 = std::filesystem::path(stem).string();
+
+        // Add script directory to sys.path
+        PyObject* sys_path = PySys_GetObject("path");
+        PyObject* dir_py = PyUnicode_FromString(dir_utf8.c_str());
+        PyList_Insert(sys_path, 0, dir_py);
+        Py_DECREF(dir_py);
+
+        // Import the module
+        PyObject* module = PyImport_ImportModule(mod_utf8.c_str());
+        if (!module) {
+            PyErr_Print();
+            return false;
+        }
+
+        // Get the 'play' function
+        PyObject* func = PyObject_GetAttrString(module, play_func_name.c_str());
+        if (!func || !PyCallable_Check(func)) {
+            PyErr_Print();
+            Py_XDECREF(func);
+            Py_DECREF(module);
+            return false;
+        }
+
+        // Call the function (no arguments)
+        PyObject* result = PyObject_CallObject(func, nullptr);
+        if (!result) {
+            PyErr_Print();
+            Py_DECREF(func);
+            Py_DECREF(module);
+            return false;
+        }
+
+        // Clean up
+        Py_DECREF(result);
+        Py_DECREF(func);
+        Py_DECREF(module);
+
+        // Optionally: Py_Finalize(); // Only if you are done with Python in the process
+
+        return true;
+    }
 }
 
 #pragma endregion
@@ -1025,7 +1081,7 @@ static PyObject* chivel_wait(PyObject* self, PyObject* args) {
 }
 
 static PyObject* chivel_record(PyObject* self, PyObject* args, PyObject* kwds) {
-    const char* output_path = "recorded_actions.py";
+    const char* output_path = "recording.py";
     int simplify = SIMPLIFY_ALL;
     int stop_key = VK_F12; // Default to F12
     static const char* kwlist[] = { "output_path", "simplify", "stop_key", nullptr};
@@ -1056,6 +1112,22 @@ static PyObject* chivel_record(PyObject* self, PyObject* args, PyObject* kwds) {
     if (!result)
         return nullptr;
     Py_DECREF(result);
+    Py_RETURN_NONE;
+}
+
+static PyObject* chivel_play(PyObject* self, PyObject* args) {
+    const char* script_path = nullptr;
+    const char* play_func_name = "play";
+    if (!PyArg_ParseTuple(args, "s|s", &script_path, &play_func_name)) {
+        return nullptr;
+    }
+
+    bool ok = chivel::run_python_play_function(script_path, play_func_name);
+    if (!ok) {
+        PyErr_SetString(PyExc_RuntimeError, std::format("Failed to run {}() in the given script.", play_func_name).c_str());
+        return nullptr;
+    }
+
     Py_RETURN_NONE;
 }
 
@@ -1279,19 +1351,20 @@ static PyMethodDef chivelMethods[] = {
 	{"find", (PyCFunction)chivel_find, METH_VARARGS | METH_KEYWORDS, "Find rectangles or text in an image"},
 	{"draw", (PyCFunction)chivel_draw, METH_VARARGS | METH_KEYWORDS, "Draw rectangle(s) on an image"},
 	{"wait", chivel_wait, METH_VARARGS, "Wait for a specified number of seconds"},
-	{"mouse_move", chivel_mouse_move, METH_VARARGS, "Move the mouse cursor to a position on a specific monitor"},
+	{"mouse_move", chivel_mouse_move, METH_VARARGS, "Move the mouse cursor to a position on a specific display"},
 	{"mouse_click", (PyCFunction)chivel_mouse_click, METH_VARARGS | METH_KEYWORDS, "Click the mouse button"},
 	{"mouse_down", (PyCFunction)chivel_mouse_down, METH_VARARGS | METH_KEYWORDS, "Press a mouse button down"},
 	{"mouse_up", (PyCFunction)chivel_mouse_up, METH_VARARGS | METH_KEYWORDS, "Release a mouse button"},
 	{"mouse_scroll", (PyCFunction)chivel_mouse_scroll, METH_VARARGS | METH_KEYWORDS, "Scroll the mouse wheel vertically and/or horizontally"},
-    {"mouse_get_location", chivel_get_location, METH_NOARGS, "Get the current mouse monitor index and cursor location"},
-	{"mouse_get_display", chivel_mouse_get_display, METH_NOARGS, "Get the monitor index where the mouse cursor is currently located"},
+    {"mouse_get_location", chivel_get_location, METH_NOARGS, "Get the current mouse display index and cursor location"},
+	{"mouse_get_display", chivel_mouse_get_display, METH_NOARGS, "Get the current mouse display index"},
 	{"type", (PyCFunction)chivel_type, METH_VARARGS | METH_KEYWORDS, "Type a string using the keyboard"},
 	{"key_click", (PyCFunction)chivel_key_click, METH_VARARGS | METH_KEYWORDS, "Click a key on the keyboard"},
 	{"key_down", chivel_key_down, METH_VARARGS, "Press a key down"},
 	{"key_up", chivel_key_up, METH_VARARGS, "Release a key"},
 	{"record", (PyCFunction)chivel_record, METH_VARARGS | METH_KEYWORDS, "Record a sequence of actions to a Python script"},
-	{"display_get_rect", chivel_display_get_rect, METH_VARARGS, "Get the rectangle of a specific monitor"},
+	{"play", chivel_play, METH_VARARGS, "Play a recorded sequence of actions from a Python script"},
+	{"display_get_rect", chivel_display_get_rect, METH_VARARGS, "Get the rectangle of a specific display, relative to the primary display"},
     {nullptr, nullptr, 0, nullptr}
 };
 

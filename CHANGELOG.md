@@ -1,5 +1,9 @@
 # Change log
 
+## 0.3.1
+- Add play.
+- Remove debug lines.
+
 ## 0.3.0
 - Add recording.
 - Add recording simplification.
