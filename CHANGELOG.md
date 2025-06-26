@@ -1,5 +1,15 @@
 # Change log
 
+## 3.0
+- Add recording.
+- Add recording simplification.
+
+## 0.2.0
+- Add KEY constants.
+- Add key_click, key_down, key_up.
+- Improve find for text searches.
+    - Now uses Regex patterns.
+
 ## 0.1.7
 - Fix DISPLAY_COUNT constant.
 

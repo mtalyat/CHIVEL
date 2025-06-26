@@ -153,15 +153,10 @@
       <AdditionalDependencies>python313.lib;opencv_world4110.lib;leptonica-1.85.0.lib;tesseract55.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>if not exist "$(TargetDir)chivel" mkdir "$(TargetDir)chivel"
+      <Command>xcopy /e /k /y /i "$(ProjectDir)module\" "$(TargetDir)"
 xcopy /y "$(ProjectDir)..\..\Libraries\opencv\bin\*" "$(TargetDir)chivel"
 xcopy /y /s "$(ProjectDir)..\..\Libraries\tesseractocr\bin\*" "$(TargetDir)chivel"
-copy /y "$(TargetPath)" "$(TargetDir)chivel\$(TargetName).pyd"
-copy /y "$(ProjectDir)chivel.pyi" "$(TargetDir)chivel"
-copy /y "$(ProjectDir)__init__.py" "$(TargetDir)chivel"
-copy /y "$(ProjectDir)test.py" "$(TargetDir)chivel"
-copy /y "$(ProjectDir)setup.py" "$(TargetDir)"
-copy /y "$(ProjectDir)build.bat" "$(TargetDir)"</Command>
+copy /y "$(TargetPath)" "$(TargetDir)chivel\$(TargetName).pyd"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -178,10 +173,12 @@ copy /y "$(ProjectDir)build.bat" "$(TargetDir)"</Command>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <None Include="build.bat" />
-    <None Include="chivel.pyi" />
-    <None Include="setup.py" />
-    <None Include="__init__.py" />
+    <None Include="module\build.bat" />
+    <None Include="module\chivel\chivel.pyi" />
+    <None Include="module\chivel\test.py" />
+    <None Include="module\chivel\_recorder.py" />
+    <None Include="module\chivel\__init__.py" />
+    <None Include="module\setup.py" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
