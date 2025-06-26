@@ -1,5 +1,8 @@
 # Change log
 
+## 0.3.2
+- Update project descriptions.
+
 ## 0.3.1
 - Add play.
 - Remove debug lines.
