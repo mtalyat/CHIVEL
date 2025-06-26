@@ -17,5 +17,4 @@ if /i "%UPLOAD%"=="y" (
 	echo Skipping upload.
 	exit /b 0
 )
-
 pause

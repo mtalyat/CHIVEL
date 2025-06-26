@@ -8,7 +8,7 @@
 #include <Windows.h>
 #include <filesystem>
 
-#pragma region CHIVEL
+#pragma region chivel
 
 namespace chivel
 {
@@ -103,6 +103,20 @@ namespace chivel
 	bool setCursorPosition(int x, int y) {
 		return SetCursorPos(x, y);
 	}
+
+    int get_display_count() {
+        int count = 0;
+        EnumDisplayMonitors(
+            nullptr, nullptr,
+            [](HMONITOR, HDC, LPRECT, LPARAM lParam) -> BOOL {
+                int* pCount = reinterpret_cast<int*>(lParam);
+                ++(*pCount);
+                return TRUE;
+            },
+            reinterpret_cast<LPARAM>(&count)
+        );
+        return count;
+    }
 }
 
 #pragma endregion
@@ -136,7 +150,7 @@ static int CHIVELImage_init(CHIVELImageObject* self, PyObject* args, PyObject* k
 
 static PyTypeObject CHIVELImageType = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    "CHIVEL.Image",             /* tp_name */
+    "chivel.Image",             /* tp_name */
     sizeof(CHIVELImageObject),  /* tp_basicsize */
     0,                         /* tp_itemsize */
     (destructor)CHIVELImage_dealloc, /* tp_dealloc */
@@ -156,7 +170,7 @@ static PyTypeObject CHIVELImageType = {
     0,                         /* tp_as_buffer */
     Py_TPFLAGS_DEFAULT |
     Py_TPFLAGS_BASETYPE,       /* tp_flags */
-    "CHIVEL Image objects",     /* tp_doc */
+    "Chivel Image objects",     /* tp_doc */
     0,		                   /* tp_traverse */
     0,		                   /* tp_clear */
     0,		                   /* tp_richcompare */
@@ -191,7 +205,7 @@ static PyObject* chivel_load(PyObject* self, PyObject* args) {
         return nullptr;
     }
 
-    // Create a new CHIVEL.Image object
+    // Create a new chivel.Image object
     PyObject* image_obj = CHIVELImage_new(&CHIVELImageType, nullptr, nullptr);
     if (!image_obj)
         return nullptr;
@@ -211,7 +225,7 @@ static PyObject* chivel_save(PyObject* self, PyObject* args) {
         return nullptr;
 
     if (!PyObject_TypeCheck(image_obj, &CHIVELImageType)) {
-        PyErr_SetString(PyExc_TypeError, "First argument must be a CHIVEL.Image object");
+        PyErr_SetString(PyExc_TypeError, "First argument must be a chivel.Image object");
         return nullptr;
     }
 
@@ -235,9 +249,9 @@ static PyObject* chivel_show(PyObject* self, PyObject* args) {
     if (!PyArg_ParseTuple(args, "O|s", &image_obj, &window_name))
         return nullptr;
 
-    // Check if the object is of type CHIVEL.Image
+    // Check if the object is of type chivel.Image
     if (!PyObject_TypeCheck(image_obj, &CHIVELImageType)) {
-        PyErr_SetString(PyExc_TypeError, "Expected a CHIVEL.Image object");
+        PyErr_SetString(PyExc_TypeError, "Expected a chivel.Image object");
         return nullptr;
     }
 
@@ -266,7 +280,7 @@ static PyObject* chivel_capture(PyObject* self, PyObject* args) {
         return nullptr;
     }
 
-    // Create a new CHIVEL.Image object
+    // Create a new chivel.Image object
     PyObject* image_obj = CHIVELImage_new(&CHIVELImageType, nullptr, nullptr);
     if (!image_obj)
         return nullptr;
@@ -303,7 +317,7 @@ static PyObject* chivel_find(PyObject* self, PyObject* args, PyObject* kwargs) {
         return nullptr;
 
     if (!PyObject_TypeCheck(source_obj, &CHIVELImageType)) {
-        PyErr_SetString(PyExc_TypeError, "First argument must be a CHIVEL.Image object");
+        PyErr_SetString(PyExc_TypeError, "First argument must be a chivel.Image object");
         return nullptr;
     }
 
@@ -313,7 +327,7 @@ static PyObject* chivel_find(PyObject* self, PyObject* args, PyObject* kwargs) {
         return nullptr;
     }
 
-    // If second arg is CHIVEL.Image, do template matching
+    // If second arg is chivel.Image, do template matching
     if (PyObject_TypeCheck(search_obj, &CHIVELImageType)) {
         CHIVELImageObject* templ = (CHIVELImageObject*)search_obj;
         if (!templ->mat || templ->mat->empty()) {
@@ -442,7 +456,7 @@ static PyObject* chivel_find(PyObject* self, PyObject* args, PyObject* kwargs) {
         return matches;
     }
 
-    PyErr_SetString(PyExc_TypeError, "Second argument must be a CHIVEL.Image or a string");
+    PyErr_SetString(PyExc_TypeError, "Second argument must be a chivel.Image or a string");
     return nullptr;
 }
 
@@ -456,7 +470,7 @@ static PyObject* chivel_draw(PyObject* self, PyObject* args, PyObject* kwds) {
         return nullptr;
 
     if (!PyObject_TypeCheck(image_obj, &CHIVELImageType)) {
-        PyErr_SetString(PyExc_TypeError, "First argument must be a CHIVEL.Image object");
+        PyErr_SetString(PyExc_TypeError, "First argument must be a chivel.Image object");
         return nullptr;
     }
 
@@ -834,6 +848,7 @@ static int chivel_module_exec(PyObject* module)
     PyModule_AddIntConstant(module, "LINE", tesseract::RIL_TEXTLINE);
     PyModule_AddIntConstant(module, "WORD", tesseract::RIL_WORD);
     PyModule_AddIntConstant(module, "SYMBOL", tesseract::RIL_SYMBOL);
+    PyModule_AddIntConstant(module, "DISPLAY_COUNT", chivel::get_display_count());
 
     return 0;
 }
@@ -871,7 +886,7 @@ static PyMethodDef chivelMethods[] = {
 // Module definition
 static struct PyModuleDef chivelmodule = {
     PyModuleDef_HEAD_INIT,
-    "CHIVEL",   // Module name
+    "chivel",   // Module name
     nullptr,     // Module documentation
     0,          // Size of per-interpreter state of the module
     chivelMethods,
@@ -882,7 +897,7 @@ static struct PyModuleDef chivelmodule = {
 };
 
 // Module initialization function
-PyMODINIT_FUNC PyInit_CHIVEL(void) {
+PyMODINIT_FUNC PyInit_chivel(void) {
     //return PyModule_Create(&chivelmodule);
 	return PyModuleDef_Init(&chivelmodule);
 }

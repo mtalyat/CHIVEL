@@ -71,7 +71,9 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <TargetName>chivel</TargetName>
+  </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
@@ -157,6 +159,7 @@ xcopy /y /s "$(ProjectDir)..\..\Libraries\tesseractocr\bin\*" "$(TargetDir)chive
 copy /y "$(TargetPath)" "$(TargetDir)chivel\$(TargetName).pyd"
 copy /y "$(ProjectDir)chivel.pyi" "$(TargetDir)chivel"
 copy /y "$(ProjectDir)__init__.py" "$(TargetDir)chivel"
+copy /y "$(ProjectDir)test.py" "$(TargetDir)chivel"
 copy /y "$(ProjectDir)setup.py" "$(TargetDir)"
 copy /y "$(ProjectDir)build.bat" "$(TargetDir)"</Command>
     </PostBuildEvent>
