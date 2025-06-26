@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name="chivel",
-    version="0.2.0",
+    version="0.3.0",
     description="Chivel C++/Python extension",
     author="Mitchell Talyat",
     packages=["chivel"],

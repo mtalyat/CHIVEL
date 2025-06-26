@@ -1,8 +1,12 @@
 # Change log
 
-## 3.0
+## 0.3.0
 - Add recording.
 - Add recording simplification.
+- Add capture rect.
+- Add get mouse display.
+- Add get mouse location.
+- Add get display rect (relative to primary display).
 
 ## 0.2.0
 - Add KEY constants.

@@ -79,6 +79,51 @@ namespace chivel
         return mat;
     }
 
+    cv::Mat captureRect(int x, int y, int w, int h, int monitorIndex = 0) {
+        // Get monitor info
+        DISPLAY_DEVICE dd;
+        dd.cb = sizeof(dd);
+        EnumDisplayDevices(NULL, monitorIndex, &dd, 0);
+
+        DEVMODE dm;
+        dm.dmSize = sizeof(dm);
+        EnumDisplaySettings(dd.DeviceName, ENUM_CURRENT_SETTINGS, &dm);
+
+        int mon_x = dm.dmPosition.x;
+        int mon_y = dm.dmPosition.y;
+
+        // Get the device context of the specific monitor
+        HDC hScreenDC = CreateDC(NULL, dd.DeviceName, NULL, NULL);
+        HDC hMemoryDC = CreateCompatibleDC(hScreenDC);
+
+        // Create a compatible bitmap
+        HBITMAP hBitmap = CreateCompatibleBitmap(hScreenDC, w, h);
+        HBITMAP hOldBitmap = (HBITMAP)SelectObject(hMemoryDC, hBitmap);
+
+        // Copy the specified rectangle into the bitmap (relative to monitor)
+        BitBlt(hMemoryDC, 0, 0, w, h, hScreenDC, x, y, SRCCOPY);
+
+        // Create OpenCV image
+        BITMAPINFOHEADER bi = { 0 };
+        bi.biSize = sizeof(BITMAPINFOHEADER);
+        bi.biWidth = w;
+        bi.biHeight = -h; // negative for top-down bitmap
+        bi.biPlanes = 1;
+        bi.biBitCount = 24;
+        bi.biCompression = BI_RGB;
+
+        cv::Mat mat(h, w, CV_8UC3);
+        GetDIBits(hMemoryDC, hBitmap, 0, h, mat.data, (BITMAPINFO*)&bi, DIB_RGB_COLORS);
+
+        // Cleanup
+        SelectObject(hMemoryDC, hOldBitmap);
+        DeleteObject(hBitmap);
+        DeleteDC(hMemoryDC);
+        DeleteDC(hScreenDC);
+
+        return mat;
+    }
+
     cv::Mat adjustImage(cv::Mat const& original)
     {
         cv::Mat gray;
@@ -311,26 +356,40 @@ static PyObject* chivel_show(PyObject* self, PyObject* args) {
     Py_RETURN_NONE;
 }
 
-static PyObject* chivel_capture(PyObject* self, PyObject* args) {
+static PyObject* chivel_capture(PyObject* self, PyObject* args, PyObject* kwargs) {
     int monitorIndex = 0;
-    if (!PyArg_ParseTuple(args, "|i", &monitorIndex))
+    PyObject* rect_obj = nullptr;
+    static const char* kwlist[] = { "monitor", "rect", nullptr };
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "|iO", (char**)kwlist, &monitorIndex, &rect_obj))
         return nullptr;
 
-    // Capture the screen using your existing function
-    cv::Mat img = chivel::captureScreen(monitorIndex);
+    cv::Mat img;
+    if (rect_obj && rect_obj != Py_None) {
+        // Expect a tuple (x, y, w, h)
+        int x, y, w, h;
+        if (!PyTuple_Check(rect_obj) || PyTuple_Size(rect_obj) != 4 ||
+            !PyArg_ParseTuple(rect_obj, "iiii", &x, &y, &w, &h)) {
+            PyErr_SetString(PyExc_TypeError, "rect must be a tuple (x, y, w, h)");
+            return nullptr;
+        }
+        img = chivel::captureRect(x, y, w, h, monitorIndex);
+    }
+    else {
+        img = chivel::captureScreen(monitorIndex);
+    }
+
     if (img.empty()) {
-        PyErr_SetString(PyExc_RuntimeError, "Failed to capture screen for the given display index");
+        PyErr_SetString(PyExc_RuntimeError, "Failed to capture screen");
         return nullptr;
     }
 
-    // Create a new chivel.Image object
     PyObject* image_obj = CHIVELImage_new(&CHIVELImageType, nullptr, nullptr);
     if (!image_obj)
         return nullptr;
 
     CHIVELImageObject* image = (CHIVELImageObject*)image_obj;
-    delete image->mat; // Delete the default empty mat
-    image->mat = new cv::Mat(img); // Assign captured image
+    delete image->mat;
+    image->mat = new cv::Mat(img);
 
     return image_obj;
 }
@@ -1216,7 +1275,7 @@ static PyMethodDef chivelMethods[] = {
 	{"load", chivel_load, METH_VARARGS, "Load an image from a file"},
 	{"save", chivel_save, METH_VARARGS, "Save an image to a file"},
 	{"show", chivel_show, METH_VARARGS, "Show an image in a window"},
-	{"capture", chivel_capture, METH_VARARGS, "Capture the screen from a specific monitor"},
+    {"capture", (PyCFunction)chivel_capture, METH_VARARGS | METH_KEYWORDS, "Capture the screen or a specific rectangle"},
 	{"find", (PyCFunction)chivel_find, METH_VARARGS | METH_KEYWORDS, "Find rectangles or text in an image"},
 	{"draw", (PyCFunction)chivel_draw, METH_VARARGS | METH_KEYWORDS, "Draw rectangle(s) on an image"},
 	{"wait", chivel_wait, METH_VARARGS, "Wait for a specified number of seconds"},
