@@ -1,7 +1,57 @@
 # Change log
 
-## 0.3.3
+## 0.4.0
 - Fix DPI scaling.
+- Fix Python3 dependency.
+- Fix display_index functions.
+- Find now returns the text found (in addition to location), when searching for text.
+- Reorder values from mouse_get_location (now position, then display_index).
+- Move chivel.show to Image.
+- Remove chivel.draw. Replaced it with methods found in Image.
+- Add the following functions to Image:
+    - clone
+    - crop
+    - grayscale
+    - scale
+    - rotate
+    - flip
+    - resize
+    - draw_rect
+    - draw_matches
+    - draw_line
+    - draw_text
+    - draw_ellipse
+    - draw_image
+    - invert
+    - brightness
+    - contrast
+    - sharpen
+    - blur
+    - threshold
+    - normalize
+    - edge
+    - emboss
+    - split
+    - merge
+    - to_color
+    - range
+    - mask
+- Add the following constants:
+    - BUTTON_LEFT
+    - BUTTON_RIGHT
+    - BUTTON_MIDDLE
+    - BUTTON_X1
+    - BUTTON_X2
+    - FLIP_VERTICAL
+    - FLIP_HORIZONTAL
+    - FLIP_BOTH
+    - COLOR_SPACE_UNKNOWN
+    - COLOR_SPACE_BGR
+    - COLOR_SPACE_BGRA
+    - COLOR_SPACE_RGB
+    - COLOR_SPACE_RGBA
+    - COLOR_SPACE_GRAY
+    - COLOR_SPACE_HSV
 
 ## 0.3.2
 - Update project descriptions.

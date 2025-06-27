@@ -49,6 +49,8 @@ enum ColorSpace
 	COLOR_SPACE_RGBA = 4, // RGB with alpha channel
 	COLOR_SPACE_GRAY = 5, // Grayscale
 	COLOR_SPACE_HSV = 6, // HSV color space
+
+	COLOR_SPACE_DEFAULT = COLOR_SPACE_BGR // Default color space for reading images
 };
 
 namespace chivel
@@ -186,10 +188,6 @@ namespace chivel
 		cv::addWeighted(binary, 1.3, sharpened, -0.3, 0, sharpened);
 
 		cv::Mat final = sharpened;
-
-		// For debugging: show the processed image
-		cv::imshow("Adjusted Image", final);
-
 		return final;
 	}
 
@@ -549,7 +547,7 @@ static PyObject* CHIVELImage_draw_rect(CHIVELImageObject* self, PyObject* args, 
 static PyObject* CHIVELImage_draw_matches(CHIVELImageObject* self, PyObject* args, PyObject* kwargs);
 static PyObject* CHIVELImage_draw_line(CHIVELImageObject* self, PyObject* args, PyObject* kwargs);
 static PyObject* CHIVELImage_draw_text(CHIVELImageObject* self, PyObject* args, PyObject* kwargs);
-static PyObject* CHIVELImage_draw_circle(CHIVELImageObject* self, PyObject* args, PyObject* kwargs);
+static PyObject* CHIVELImage_draw_ellipse(CHIVELImageObject* self, PyObject* args, PyObject* kwargs);
 static PyObject* CHIVELImage_draw_image(CHIVELImageObject* self, PyObject* args, PyObject* kwargs);
 static PyObject* CHIVELImage_invert(CHIVELImageObject* self, PyObject* /*unused*/);
 static PyObject* CHIVELImage_brightness(CHIVELImageObject* self, PyObject* args);
@@ -560,9 +558,11 @@ static PyObject* CHIVELImage_threshold(CHIVELImageObject* self, PyObject* args);
 static PyObject* CHIVELImage_normalize(CHIVELImageObject* self, PyObject* args);
 static PyObject* CHIVELImage_edge(CHIVELImageObject* self, PyObject* args);
 static PyObject* CHIVELImage_emboss(CHIVELImageObject* self, PyObject* /*unused*/);
-static PyObject* CHIVELImage_split_channels(CHIVELImageObject* self, PyObject* /*unused*/);
-static PyObject* CHIVELImage_merge_channels(PyObject* /*cls*/, PyObject* args);
+static PyObject* CHIVELImage_split(CHIVELImageObject* self, PyObject* /*unused*/);
+static PyObject* CHIVELImage_merge(PyObject* /*cls*/, PyObject* args);
 static PyObject* CHIVELImage_to_color(CHIVELImageObject* self, PyObject* args);
+static PyObject* CHIVELImage_range(CHIVELImageObject* self, PyObject* args);
+static PyObject* CHIVELImage_mask(CHIVELImageObject* self, PyObject* args);
 
 static PyMethodDef CHIVELImage_methods[] = {
 	{"get_size", (PyCFunction)CHIVELImage_get_size, METH_NOARGS, "Return (width, height) of the image"},
@@ -578,7 +578,7 @@ static PyMethodDef CHIVELImage_methods[] = {
 	{"draw_matches", (PyCFunction)CHIVELImage_draw_matches, METH_VARARGS | METH_KEYWORDS, "Draw a list of matches as rectangles on the image"},
 	{"draw_line", (PyCFunction)CHIVELImage_draw_line, METH_VARARGS | METH_KEYWORDS, "Draw a line on the image"},
 	{"draw_text", (PyCFunction)CHIVELImage_draw_text, METH_VARARGS | METH_KEYWORDS, "Draw text on the image"},
-	{"draw_circle", (PyCFunction)CHIVELImage_draw_circle, METH_VARARGS | METH_KEYWORDS, "Draw a circle or ellipse on the image"},
+	{"draw_ellipse", (PyCFunction)CHIVELImage_draw_ellipse, METH_VARARGS | METH_KEYWORDS, "Draw an ellipse on the image"},
 	{"draw_image", (PyCFunction)CHIVELImage_draw_image, METH_VARARGS | METH_KEYWORDS, "Draw another image onto this image at a specified position with optional alpha blending"},
 	{"invert", (PyCFunction)CHIVELImage_invert, METH_NOARGS, "Invert the colors of the image"},
 	{"brightness", (PyCFunction)CHIVELImage_brightness, METH_VARARGS, "Adjust the brightness of the image by a given value"},
@@ -589,9 +589,11 @@ static PyMethodDef CHIVELImage_methods[] = {
 	{"normalize", (PyCFunction)CHIVELImage_normalize, METH_VARARGS, "Normalize the image pixel values"},
 	{"edge", (PyCFunction)CHIVELImage_edge, METH_VARARGS, "Detect edges in the image using Canny edge detection"},
 	{"emboss", (PyCFunction)CHIVELImage_emboss, METH_NOARGS, "Apply an emboss effect to the image"},
-	{"split_channels", (PyCFunction)CHIVELImage_split_channels, METH_NOARGS, "Split the image into its color channels"},
-	{"merge_channels", (PyCFunction)CHIVELImage_merge_channels, METH_CLASS | METH_VARARGS, "Merge multiple single-channel images into a multi-channel image"},
+	{"split", (PyCFunction)CHIVELImage_split, METH_NOARGS, "Split the image into its color channels"},
+	{"merge", (PyCFunction)CHIVELImage_merge, METH_VARARGS, "Merge multiple channel images into a single image"},
 	{"to_color", (PyCFunction)CHIVELImage_to_color, METH_VARARGS, "Convert the image to a specified color space"},
+	{"range", (PyCFunction)CHIVELImage_range, METH_VARARGS, "Check if the image is within a specified color range"},
+	{"mask", (PyCFunction)CHIVELImage_mask, METH_VARARGS, "Apply a mask to the image"},
 	{nullptr, nullptr, 0, nullptr}
 };
 
@@ -841,8 +843,17 @@ static PyObject* CHIVELImage_flip(CHIVELImageObject* self, PyObject* args) {
 }
 
 static PyObject* CHIVELImage_resize(CHIVELImageObject* self, PyObject* args) {
+	PyObject* size_obj = nullptr;
+	if (!PyArg_ParseTuple(args, "O", &size_obj))
+		return nullptr;
+
+	if (!PyTuple_Check(size_obj) || PyTuple_Size(size_obj) != 2) {
+		PyErr_SetString(PyExc_TypeError, "Argument must be a tuple (width, height)");
+		return nullptr;
+	}
+
 	int width = 0, height = 0;
-	if (!PyArg_ParseTuple(args, "ii", &width, &height))
+	if (!PyArg_ParseTuple(size_obj, "ii", &width, &height))
 		return nullptr;
 
 	if (!self->mat || self->mat->empty()) {
@@ -945,23 +956,25 @@ static PyObject* CHIVELImage_draw_matches(CHIVELImageObject* self, PyObject* arg
 		return nullptr;
 	}
 
-	Py_ssize_t n = PyList_Size(rects_obj);
-	for (Py_ssize_t i = 0; i < n; ++i) {
-		PyObject* rect_obj = PyList_GetItem(rects_obj, i); // Borrowed reference
-		if (!PyTuple_Check(rect_obj) || PyTuple_Size(rect_obj) != 4) {
-			PyErr_SetString(PyExc_TypeError, "Each rect must be a tuple of 4 integers (x, y, w, h)");
-			return nullptr;
-		}
-		int x, y, w, h;
-		if (!PyArg_ParseTuple(rect_obj, "iiii", &x, &y, &w, &h)) {
-			PyErr_SetString(PyExc_TypeError, "Each rect must be a tuple of 4 integers (x, y, w, h)");
-			return nullptr;
-		}
-		if (w <= 0 || h <= 0) {
-			continue; // Skip invalid rectangles
-		}
-		cv::rectangle(*self->mat, cv::Rect(x, y, w, h), color, thickness);
-	}
+    Py_ssize_t n = PyList_Size(rects_obj);
+    for (Py_ssize_t i = 0; i < n; ++i) {
+    PyObject* rect_obj = PyList_GetItem(rects_obj, i); // Borrowed reference
+    if (!PyTuple_Check(rect_obj) || (PyTuple_Size(rect_obj) != 4 && PyTuple_Size(rect_obj) != 5)) {
+    PyErr_SetString(PyExc_TypeError, "Each rect must be a tuple of 4 or 5 elements (x, y, w, h[, label])");
+    return nullptr;
+    }
+    int x, y, w, h;
+	PyObject* label_obj = nullptr;
+    // Accept 4 or 5 elements, ignore the 5th if present
+    if (!PyArg_ParseTuple(rect_obj, "iiii|O", &x, &y, &w, &h, &label_obj)) {
+    PyErr_SetString(PyExc_TypeError, "Each rect must start with 4 integers (x, y, w, h)");
+    return nullptr;
+    }
+    if (w <= 0 || h <= 0) {
+    continue; // Skip invalid rectangles
+    }
+    cv::rectangle(*self->mat, cv::Rect(x, y, w, h), color, thickness);
+    }
 
 	Py_RETURN_NONE;
 }
@@ -1019,8 +1032,9 @@ static PyObject* CHIVELImage_draw_text(CHIVELImageObject* self, PyObject* args, 
 	PyObject* pos_obj = nullptr;
 	PyObject* color_obj = nullptr;
 	int font_size = 24;
-	static const char* kwlist[] = { "text", "pos", "color", "font_size", nullptr };
-	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "sO|Oi", (char**)kwlist, &text, &pos_obj, &color_obj, &font_size))
+	int thickness = -1;
+	static const char* kwlist[] = { "text", "pos", "color", "font_size", "thickness", nullptr };
+	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "sO|Oii", (char**)kwlist, &text, &pos_obj, &color_obj, &font_size, &thickness))
 		return nullptr;
 
 	if (!self->mat || self->mat->empty()) {
@@ -1055,14 +1069,15 @@ static PyObject* CHIVELImage_draw_text(CHIVELImageObject* self, PyObject* args, 
 	// Use OpenCV's Hershey font, scale to match font_size in pixels
 	int font_face = cv::FONT_HERSHEY_SIMPLEX;
 	double font_scale = font_size / 24.0; // 24 is a reasonable default pixel height for scale=1
-	int thickness = std::max(1, font_size / 12);
+	int use_thickness = (thickness >= 0) ? thickness : std::max(1, font_size / 12);
+	if (use_thickness < 1) use_thickness = 1;
 
-	cv::putText(*self->mat, text, cv::Point(x, y), font_face, font_scale, color, thickness, cv::LINE_AA);
+	cv::putText(*self->mat, text, cv::Point(x, y), font_face, font_scale, color, use_thickness, cv::LINE_AA);
 
 	Py_RETURN_NONE;
 }
 
-static PyObject* CHIVELImage_draw_circle(CHIVELImageObject* self, PyObject* args, PyObject* kwargs) {
+static PyObject* CHIVELImage_draw_ellipse(CHIVELImageObject* self, PyObject* args, PyObject* kwargs) {
 	PyObject* center_obj = nullptr;
 	PyObject* radius_or_axes_obj = nullptr;
 	PyObject* color_obj = nullptr;
@@ -1294,16 +1309,24 @@ static PyObject* CHIVELImage_sharpen(CHIVELImageObject* self, PyObject* args) {
 }
 
 static PyObject* CHIVELImage_blur(CHIVELImageObject* self, PyObject* args) {
-	int ksize = 5;
+	int ksize = 3;
 	if (!PyArg_ParseTuple(args, "|i", &ksize))
 		return nullptr;
 
-	if (!self->mat || self->mat->empty()) {
-		PyErr_SetString(PyExc_ValueError, "Image data is empty");
+	// scale size
+	if (ksize < 1) {
+		PyErr_SetString(PyExc_ValueError, "Blur amount must be a positive integer");
 		return nullptr;
 	}
-	if (ksize < 1 || ksize % 2 == 0) {
-		PyErr_SetString(PyExc_ValueError, "Kernel size must be a positive odd integer");
+	if (ksize == 0)
+	{
+		// do nothing
+		Py_RETURN_NONE;
+	}
+	ksize = (ksize - 1) * 2 + 1;
+
+	if (!self->mat || self->mat->empty()) {
+		PyErr_SetString(PyExc_ValueError, "Image data is empty");
 		return nullptr;
 	}
 
@@ -1347,7 +1370,7 @@ static PyObject* CHIVELImage_normalize(CHIVELImageObject* self, PyObject* args) 
 	double alpha = 0.0;
 	double beta = 255.0;
 	int norm_type = cv::NORM_MINMAX;
-	if (!PyArg_ParseTuple(args, "|ddi", &alpha, &beta, &norm_type))
+	if (!PyArg_ParseTuple(args, "|dd", &alpha, &beta))
 		return nullptr;
 
 	if (!self->mat || self->mat->empty()) {
@@ -1425,9 +1448,14 @@ static PyObject* CHIVELImage_emboss(CHIVELImageObject* self, PyObject* /*unused*
 	Py_RETURN_NONE;
 }
 
-static PyObject* CHIVELImage_split_channels(CHIVELImageObject* self, PyObject* /*unused*/) {
+static PyObject* CHIVELImage_split(CHIVELImageObject* self, PyObject* /*unused*/) {
 	if (!self->mat || self->mat->empty()) {
 		PyErr_SetString(PyExc_ValueError, "Image data is empty");
+		return nullptr;
+	}
+	if (self->color_space == COLOR_SPACE_UNKNOWN)
+	{
+		PyErr_SetString(PyExc_ValueError, "Image color space is unknown");
 		return nullptr;
 	}
 
@@ -1447,13 +1475,14 @@ static PyObject* CHIVELImage_split_channels(CHIVELImageObject* self, PyObject* /
 		CHIVELImageObject* img = (CHIVELImageObject*)img_obj;
 		delete img->mat;
 		img->mat = new cv::Mat(channels[i]);
+		img->color_space = COLOR_SPACE_GRAY;
 		PyList_SET_ITEM(pyList, i, img_obj); // Steals reference
 	}
 
 	return pyList;
 }
 
-static PyObject* CHIVELImage_merge_channels(PyObject* /*cls*/, PyObject* args) {
+static PyObject* CHIVELImage_merge(PyObject* self, PyObject* args) {
 	PyObject* seqObj = nullptr;
 	if (!PyArg_ParseTuple(args, "O", &seqObj))
 		return nullptr;
@@ -1507,14 +1536,30 @@ static PyObject* CHIVELImage_merge_channels(PyObject* /*cls*/, PyObject* args) {
 	cv::Mat merged;
 	cv::merge(channels, merged);
 
-	PyObject* out_img_obj = CHIVELImage_new(&CHIVELImageType, nullptr, nullptr);
-	if (!out_img_obj)
-		return nullptr;
-	CHIVELImageObject* out_img = (CHIVELImageObject*)out_img_obj;
-	delete out_img->mat;
+	// Modify self in-place
+	CHIVELImageObject* out_img = (CHIVELImageObject*)self;
+	if (out_img->mat) {
+		delete out_img->mat;
+	}
 	out_img->mat = new cv::Mat(merged);
 
-	return out_img_obj;
+	// Set color_space based on number of channels
+	switch (static_cast<int>(channels.size())) {
+	case 1:
+		out_img->color_space = COLOR_SPACE_GRAY;
+		break;
+	case 3:
+		out_img->color_space = COLOR_SPACE_BGR;
+		break;
+	case 4:
+		out_img->color_space = COLOR_SPACE_BGRA;
+		break;
+	default:
+		out_img->color_space = COLOR_SPACE_UNKNOWN;
+		break;
+	}
+
+	Py_RETURN_NONE;
 }
 
 static PyObject* CHIVELImage_to_color(CHIVELImageObject* self, PyObject* args) {
@@ -1546,6 +1591,79 @@ static PyObject* CHIVELImage_to_color(CHIVELImageObject* self, PyObject* args) {
 	self->mat->release();
 	*self->mat = result;
 	self->color_space = dst_space;
+	Py_RETURN_NONE;
+}
+
+static PyObject* CHIVELImage_range(CHIVELImageObject* self, PyObject* args) {
+	PyObject* lower_obj = nullptr;
+	PyObject* upper_obj = nullptr;
+	if (!PyArg_ParseTuple(args, "OO", &lower_obj, &upper_obj))
+		return nullptr;
+
+	if (!self->mat || self->mat->empty()) {
+		PyErr_SetString(PyExc_ValueError, "Image data is empty");
+		return nullptr;
+	}
+
+	// Parse lower and upper bounds (expect 3-tuple)
+	if (!PyTuple_Check(lower_obj) || !PyTuple_Check(upper_obj) ||
+		PyTuple_Size(lower_obj) != 3 || PyTuple_Size(upper_obj) != 3) {
+		PyErr_SetString(PyExc_TypeError, "lower and upper must be 3-element tuples");
+		return nullptr;
+	}
+	int l0, l1, l2, u0, u1, u2;
+	if (!PyArg_ParseTuple(lower_obj, "iii", &l0, &l1, &l2) ||
+		!PyArg_ParseTuple(upper_obj, "iii", &u0, &u1, &u2)) {
+		PyErr_SetString(PyExc_TypeError, "lower and upper must be 3-element tuples of ints");
+		return nullptr;
+	}
+
+	// Convert to requested color space if needed
+	cv::Mat input = *self->mat;
+
+	// Apply inRange
+	cv::Mat mask;
+	cv::inRange(input, cv::Scalar(l0, l1, l2), cv::Scalar(u0, u1, u2), mask);
+
+	// Modify the current object in-place
+	self->mat->release();
+	*self->mat = mask;
+	self->color_space = COLOR_SPACE_GRAY;
+
+	Py_RETURN_NONE;
+}
+
+static PyObject* CHIVELImage_mask(CHIVELImageObject* self, PyObject* args) {
+	PyObject* mask_obj = nullptr;
+	if (!PyArg_ParseTuple(args, "O", &mask_obj))
+		return nullptr;
+
+	if (!PyObject_TypeCheck(mask_obj, &CHIVELImageType)) {
+		PyErr_SetString(PyExc_TypeError, "Argument must be a chivel.Image object (mask)");
+		return nullptr;
+	}
+	CHIVELImageObject* mask_img = (CHIVELImageObject*)mask_obj;
+
+	if (!self->mat || self->mat->empty() || !mask_img->mat || mask_img->mat->empty()) {
+		PyErr_SetString(PyExc_ValueError, "Image or mask data is empty");
+		return nullptr;
+	}
+	if (mask_img->mat->type() != CV_8UC1) {
+		PyErr_SetString(PyExc_TypeError, "Mask must be a single-channel 8-bit image");
+		return nullptr;
+	}
+	if (self->mat->rows != mask_img->mat->rows || self->mat->cols != mask_img->mat->cols) {
+		PyErr_SetString(PyExc_ValueError, "Mask size must match image size");
+		return nullptr;
+	}
+
+	cv::Mat result;
+	cv::bitwise_and(*self->mat, *self->mat, result, *mask_img->mat);
+
+	CHIVELImageObject* out_img = (CHIVELImageObject*)self;
+	delete out_img->mat;
+	out_img->mat = new cv::Mat(result);
+	out_img->color_space = self->color_space;
 	Py_RETURN_NONE;
 }
 
@@ -1642,7 +1760,7 @@ static PyObject* chivel_save(PyObject* self, PyObject* args) {
 static PyObject* chivel_capture(PyObject* self, PyObject* args, PyObject* kwargs) {
 	PyObject* rect_obj = nullptr;
 	int displayIndex = 0;
-	static const char* kwlist[] = { "display_index", "rect", nullptr};
+	static const char* kwlist[] = { "display_index", "rect", nullptr };
 	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "|iO", (char**)kwlist, &displayIndex, &rect_obj))
 		return nullptr;
 
@@ -1673,6 +1791,7 @@ static PyObject* chivel_capture(PyObject* self, PyObject* args, PyObject* kwargs
 	CHIVELImageObject* image = (CHIVELImageObject*)image_obj;
 	delete image->mat;
 	image->mat = new cv::Mat(img);
+	image->color_space = COLOR_SPACE_DEFAULT;
 
 	return image_obj;
 }
@@ -1799,6 +1918,7 @@ static PyObject* chivel_find(PyObject* self, PyObject* args, PyObject* kwargs) {
 			return nullptr;
 		}
 		tess.SetPageSegMode(tesseract::PSM_SPARSE_TEXT);
+		tess.SetVariable("user_defined_dpi", "300");
 		tess.SetImage(src.data, src.cols, src.rows, 1, static_cast<int>(src.step));
 		tess.Recognize(nullptr);
 		tesseract::ResultIterator* ri = tess.GetIterator();
@@ -1831,7 +1951,7 @@ static PyObject* chivel_find(PyObject* self, PyObject* args, PyObject* kwargs) {
 					std::smatch word_match;
 					if (std::regex_match(word_str, word_match, search_regex)) {
 						// word found
-						PyObject* rect_tuple = Py_BuildValue("(iiii)", x1, y1, x2 - x1, y2 - y1);
+						PyObject* rect_tuple = Py_BuildValue("(iiiis)", x1, y1, x2 - x1, y2 - y1, word_str.c_str());
 						PyList_Append(matches, rect_tuple);
 						Py_DECREF(rect_tuple);
 					}
