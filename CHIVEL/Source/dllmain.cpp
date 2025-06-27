@@ -23,6 +23,15 @@ enum SimplifyMode
 	SIMPLIFY_ALL = SIMPLIFY_MOVE | SIMPLIFY_CLICK | SIMPLIFY_TYPE | SIMPLIFY_TIME
 };
 
+enum MouseButton
+{
+	BUTTON_LEFT = 0,
+	BUTTON_RIGHT = 1,
+	BUTTON_MIDDLE = 2,
+	BUTTON_X1 = 3, // Button 4
+	BUTTON_X2 = 4  // Button 5
+};
+
 namespace chivel
 {
     std::string trim(std::string str)
@@ -781,7 +790,7 @@ static PyObject* chivel_mouse_move(PyObject* self, PyObject* args, PyObject* kwd
 }
 
 static PyObject* chivel_mouse_click(PyObject* self, PyObject* args, PyObject* kwds) {
-    int button = 0;
+    int button = BUTTON_LEFT;
     int count = 1;
     static const char* kwlist[] = { "button", "count", nullptr };
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "|ii", (char**)kwlist, &button, &count))
@@ -837,7 +846,7 @@ static PyObject* chivel_mouse_click(PyObject* self, PyObject* args, PyObject* kw
 }
 
 static PyObject* chivel_mouse_down(PyObject* self, PyObject* args, PyObject* kwds) {
-    int button = 0;
+    int button = BUTTON_LEFT;
     static const char* kwlist[] = { "button", nullptr };
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "|i", (char**)kwlist, &button))
         return nullptr;
@@ -877,7 +886,7 @@ static PyObject* chivel_mouse_down(PyObject* self, PyObject* args, PyObject* kwd
 }
 
 static PyObject* chivel_mouse_up(PyObject* self, PyObject* args, PyObject* kwds) {
-    int button = 0;
+    int button = BUTTON_LEFT;
     static const char* kwlist[] = { "button", nullptr };
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "|i", (char**)kwlist, &button))
         return nullptr;
@@ -1350,6 +1359,12 @@ static int chivel_module_exec(PyObject* module)
     PyModule_AddIntConstant(module, "KEY_F10", VK_F10);
     PyModule_AddIntConstant(module, "KEY_F11", VK_F11);
     PyModule_AddIntConstant(module, "KEY_F12", VK_F12);
+
+	PyModule_AddIntConstant(module, "BUTTON_LEFT", BUTTON_LEFT);
+	PyModule_AddIntConstant(module, "BUTTON_RIGHT", BUTTON_RIGHT);
+	PyModule_AddIntConstant(module, "BUTTON_MIDDLE", BUTTON_MIDDLE);
+	PyModule_AddIntConstant(module, "BUTTON_X1", BUTTON_X1);
+	PyModule_AddIntConstant(module, "BUTTON_X2", BUTTON_X2);
 
 	PyModule_AddIntConstant(module, "SIMPLIFY_NONE", SIMPLIFY_NONE);
 	PyModule_AddIntConstant(module, "SIMPLIFY_MOVE", SIMPLIFY_MOVE);
