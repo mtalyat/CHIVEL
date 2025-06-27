@@ -1459,7 +1459,6 @@ static PyObject* CHIVELImage_to_color(CHIVELImageObject* self, PyObject* args) {
 	Py_RETURN_NONE;
 }
 
-
 #pragma endregion
 
 static PyObject* chivel_load(PyObject* self, PyObject* args) {
@@ -1523,7 +1522,6 @@ static PyObject* chivel_load(PyObject* self, PyObject* args) {
 		cv::cvtColor(img, img, cv::COLOR_BGRA2RGBA);
 	return img;
 }
-
 
 static PyObject* chivel_save(PyObject* self, PyObject* args) {
 	PyObject* image_obj;
@@ -2225,11 +2223,11 @@ static PyObject* chivel_get_location(PyObject* self, PyObject* args) {
 
 	if (search.found == -1) {
 		// Not found, return -1 and absolute position
-		return Py_BuildValue("(iii)", -1, pt.x, pt.y);
+		return Py_BuildValue("(iii)", pt.x, pt.y, -1);
 	}
 	else {
 		// Return monitor index and position relative to that monitor
-		return Py_BuildValue("(iii)", search.found, search.x, search.y);
+		return Py_BuildValue("(iii)", search.x, search.y, search.found);
 	}
 }
 
