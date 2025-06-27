@@ -154,7 +154,8 @@ namespace chivel
 		return mat;
 	}
 
-	cv::Mat adjustImage(cv::Mat const& original)
+	// adjusts an image for text reading
+	cv::Mat adjustImage(const cv::Mat& original)
 	{
 		cv::Mat gray;
 		if (original.channels() == 3) {
@@ -164,20 +165,31 @@ namespace chivel
 			gray = original;
 		}
 		else {
-			// Unsupported format
 			return cv::Mat();
 		}
 
-		// scale image
-		cv::Mat resized;
-		float const scale = 4.0f; // Scale factor for better OCR
-		cv::resize(gray, resized, cv::Size(), scale, scale, cv::INTER_LINEAR);
+		// Scale up for better OCR
+		cv::Mat scaled;
+		const double scale = 2.0; // 2x is usually enough for screenshots
+		cv::resize(gray, scaled, cv::Size(), scale, scale, cv::INTER_CUBIC);
 
-		//// Apply adaptive thresholding for better OCR
-		//cv::Mat processed;
-		//cv::adaptiveThreshold(gray, processed, 255, cv::ADAPTIVE_THRESH_MEAN_C, cv::THRESH_BINARY, 15, 10);
+		//// Optional: slight median blur to reduce noise
+		//cv::medianBlur(scaled, scaled, 3);
 
-		cv::Mat final = resized;
+		// Otsu's thresholding (works well for screenshots)
+		cv::Mat binary;
+		cv::threshold(scaled, binary, 0, 255, cv::THRESH_BINARY | cv::THRESH_OTSU);
+
+		// Optional: mild sharpening
+		cv::Mat sharpened;
+		cv::GaussianBlur(binary, sharpened, cv::Size(0, 0), 1.0);
+		cv::addWeighted(binary, 1.3, sharpened, -0.3, 0, sharpened);
+
+		cv::Mat final = sharpened;
+
+		// For debugging: show the processed image
+		cv::imshow("Adjusted Image", final);
+
 		return final;
 	}
 
@@ -349,6 +361,26 @@ namespace chivel
 		return TRUE; // Continue enumeration
 	}
 
+	UINT get_display_dpi(int display_index = 0) {
+		DISPLAY_DEVICE dd;
+		dd.cb = sizeof(dd);
+		if (!EnumDisplayDevices(NULL, display_index, &dd, 0))
+			return 96; // fallback
+
+		DEVMODE dm;
+		dm.dmSize = sizeof(dm);
+		if (!EnumDisplaySettings(dd.DeviceName, ENUM_CURRENT_SETTINGS, &dm))
+			return 96; // fallback
+
+		POINT pt = { dm.dmPosition.x, dm.dmPosition.y };
+		HMONITOR hMonitor = MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST);
+
+		UINT dpiX = 96, dpiY = 96;
+		if (SUCCEEDED(GetDpiForMonitor(hMonitor, MDT_EFFECTIVE_DPI, &dpiX, &dpiY)))
+			return dpiX;
+		return 96; // fallback
+	}
+
 	//double get_scaling_factor_for_monitor(HMONITOR hMonitor) {
 	//    UINT dpiX = 96, dpiY = 96;
 	//    if (SUCCEEDED(GetDpiForMonitor(hMonitor, MDT_EFFECTIVE_DPI, &dpiX, &dpiY))) {
@@ -503,7 +535,6 @@ static int CHIVELImage_init(CHIVELImageObject* self, PyObject* args, PyObject* k
 	return 0;
 }
 
-
 // Forward declarations for CHIVELImage methods
 static PyObject* CHIVELImage_get_size(CHIVELImageObject* self, PyObject* /*unused*/);
 static PyObject* CHIVELImage_show(CHIVELImageObject* self, PyObject* args, PyObject* kwargs);
@@ -515,6 +546,7 @@ static PyObject* CHIVELImage_rotate(CHIVELImageObject* self, PyObject* args);
 static PyObject* CHIVELImage_flip(CHIVELImageObject* self, PyObject* args);
 static PyObject* CHIVELImage_resize(CHIVELImageObject* self, PyObject* args);
 static PyObject* CHIVELImage_draw_rect(CHIVELImageObject* self, PyObject* args, PyObject* kwargs);
+static PyObject* CHIVELImage_draw_matches(CHIVELImageObject* self, PyObject* args, PyObject* kwargs);
 static PyObject* CHIVELImage_draw_line(CHIVELImageObject* self, PyObject* args, PyObject* kwargs);
 static PyObject* CHIVELImage_draw_text(CHIVELImageObject* self, PyObject* args, PyObject* kwargs);
 static PyObject* CHIVELImage_draw_circle(CHIVELImageObject* self, PyObject* args, PyObject* kwargs);
@@ -543,6 +575,7 @@ static PyMethodDef CHIVELImage_methods[] = {
 	{"flip", (PyCFunction)CHIVELImage_flip, METH_VARARGS, "Flip the image"},
 	{"resize", (PyCFunction)CHIVELImage_resize, METH_VARARGS, "Resize the image to the specified width and height"},
 	{"draw_rect", (PyCFunction)CHIVELImage_draw_rect, METH_VARARGS | METH_KEYWORDS, "Draw a rectangle on the image"},
+	{"draw_matches", (PyCFunction)CHIVELImage_draw_matches, METH_VARARGS | METH_KEYWORDS, "Draw a list of matches as rectangles on the image"},
 	{"draw_line", (PyCFunction)CHIVELImage_draw_line, METH_VARARGS | METH_KEYWORDS, "Draw a line on the image"},
 	{"draw_text", (PyCFunction)CHIVELImage_draw_text, METH_VARARGS | METH_KEYWORDS, "Draw text on the image"},
 	{"draw_circle", (PyCFunction)CHIVELImage_draw_circle, METH_VARARGS | METH_KEYWORDS, "Draw a circle or ellipse on the image"},
@@ -874,6 +907,61 @@ static PyObject* CHIVELImage_draw_rect(CHIVELImageObject* self, PyObject* args, 
 	}
 
 	cv::rectangle(*self->mat, cv::Rect(x, y, w, h), color, thickness);
+
+	Py_RETURN_NONE;
+}
+
+static PyObject* CHIVELImage_draw_matches(CHIVELImageObject* self, PyObject* args, PyObject* kwargs) {
+	PyObject* rects_obj = nullptr;
+	PyObject* color_obj = nullptr;
+	int thickness = 2;
+	static const char* kwlist[] = { "rects", "color", "thickness", nullptr };
+	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O|Oi", (char**)kwlist, &rects_obj, &color_obj, &thickness))
+		return nullptr;
+
+	if (!self->mat || self->mat->empty()) {
+		PyErr_SetString(PyExc_ValueError, "Image data is empty");
+		return nullptr;
+	}
+
+	if (!PyList_Check(rects_obj)) {
+		PyErr_SetString(PyExc_TypeError, "rects must be a list of (x, y, w, h) tuples");
+		return nullptr;
+	}
+
+	// Default color: red (BGR: 0,0,255)
+	cv::Scalar color(0, 0, 255);
+	if (color_obj && PyTuple_Check(color_obj) && PyTuple_Size(color_obj) == 3) {
+		int r = 0, g = 0, b = 0;
+		if (!PyArg_ParseTuple(color_obj, "iii", &r, &g, &b)) {
+			PyErr_SetString(PyExc_TypeError, "Color must be a tuple of 3 integers (R, G, B)");
+			return nullptr;
+		}
+		color = cv::Scalar(b, g, r);
+	}
+
+	if (thickness < 1) {
+		PyErr_SetString(PyExc_ValueError, "thickness must be >= 1");
+		return nullptr;
+	}
+
+	Py_ssize_t n = PyList_Size(rects_obj);
+	for (Py_ssize_t i = 0; i < n; ++i) {
+		PyObject* rect_obj = PyList_GetItem(rects_obj, i); // Borrowed reference
+		if (!PyTuple_Check(rect_obj) || PyTuple_Size(rect_obj) != 4) {
+			PyErr_SetString(PyExc_TypeError, "Each rect must be a tuple of 4 integers (x, y, w, h)");
+			return nullptr;
+		}
+		int x, y, w, h;
+		if (!PyArg_ParseTuple(rect_obj, "iiii", &x, &y, &w, &h)) {
+			PyErr_SetString(PyExc_TypeError, "Each rect must be a tuple of 4 integers (x, y, w, h)");
+			return nullptr;
+		}
+		if (w <= 0 || h <= 0) {
+			continue; // Skip invalid rectangles
+		}
+		cv::rectangle(*self->mat, cv::Rect(x, y, w, h), color, thickness);
+	}
 
 	Py_RETURN_NONE;
 }
@@ -1554,8 +1642,8 @@ static PyObject* chivel_save(PyObject* self, PyObject* args) {
 static PyObject* chivel_capture(PyObject* self, PyObject* args, PyObject* kwargs) {
 	PyObject* rect_obj = nullptr;
 	int displayIndex = 0;
-	static const char* kwlist[] = { "rect", "display_index", nullptr };
-	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "|Oi", (char**)kwlist, &rect_obj, &displayIndex))
+	static const char* kwlist[] = { "display_index", "rect", nullptr};
+	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "|iO", (char**)kwlist, &displayIndex, &rect_obj))
 		return nullptr;
 
 	cv::Mat img;
@@ -1696,7 +1784,6 @@ static PyObject* chivel_find(PyObject* self, PyObject* args, PyObject* kwargs) {
 			return nullptr;
 		}
 		std::string search_str(chivel::trim(search));
-		//printf("Searching for: '%s'\n", search_str.c_str());
 		std::regex search_regex(search_str);
 
 		cv::Mat original = *(source->mat);
@@ -1712,7 +1799,6 @@ static PyObject* chivel_find(PyObject* self, PyObject* args, PyObject* kwargs) {
 			return nullptr;
 		}
 		tess.SetPageSegMode(tesseract::PSM_SPARSE_TEXT);
-		tess.SetVariable("user_defined_dpi", "300");
 		tess.SetImage(src.data, src.cols, src.rows, 1, static_cast<int>(src.step));
 		tess.Recognize(nullptr);
 		tesseract::ResultIterator* ri = tess.GetIterator();
@@ -1727,13 +1813,14 @@ static PyObject* chivel_find(PyObject* self, PyObject* args, PyObject* kwargs) {
 				const char* word = ri->GetUTF8Text(pil);
 				std::string word_str(word ? word : "");
 				word_str = chivel::trim(word_str);
+				if (word) {
+					delete[] word; // Clean up the allocated memory
+				}
 
 				float conf = ri->Confidence(pil);
-				if (!word || conf < threshold * 100.0f) {
-					delete[] word; // Clean up if no word or invalid confidence
+				if (word_str.empty() || conf < threshold * 100.0f) {
 					continue;
 				}
-				printf("Found word: '%s' with confidence %.2f\n", word_str.c_str(), conf);
 				// Scale bounding box coordinates
 				int x1, y1, x2, y2;
 				if (ri->BoundingBox(pil, &x1, &y1, &x2, &y2)) {
@@ -1744,13 +1831,11 @@ static PyObject* chivel_find(PyObject* self, PyObject* args, PyObject* kwargs) {
 					std::smatch word_match;
 					if (std::regex_match(word_str, word_match, search_regex)) {
 						// word found
-						printf("Match found at (%d, %d) to (%d, %d)\n", x1, y1, x2, y2);
 						PyObject* rect_tuple = Py_BuildValue("(iiii)", x1, y1, x2 - x1, y2 - y1);
 						PyList_Append(matches, rect_tuple);
 						Py_DECREF(rect_tuple);
 					}
 				}
-				if (word) delete[] word;
 			} while (ri->Next(pil));
 		}
 
