@@ -1,5 +1,8 @@
 # Change log
 
+## 0.3.3
+- Fix DPI scaling.
+
 ## 0.3.2
 - Update project descriptions.
 

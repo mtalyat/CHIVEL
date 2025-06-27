@@ -6,6 +6,8 @@
 #include <leptonica/allheaders.h>
 #include <Python.h>
 #include <Windows.h>
+#include <ShellScalingAPI.h> // For GetDpiForMonitor
+#pragma comment(lib, "Shcore.lib")
 #include <filesystem>
 #include <regex>
 
@@ -156,10 +158,6 @@ namespace chivel
 		return cv::imread(path, cv::IMREAD_COLOR);
     }
 
-	bool setCursorPosition(int x, int y) {
-		return SetCursorPos(x, y);
-	}
-
     int get_display_count() {
         int count = 0;
         EnumDisplayMonitors(
@@ -190,6 +188,33 @@ namespace chivel
         }
         search->index++;
         return TRUE; // Continue enumeration
+    }
+
+    //double get_scaling_factor_for_monitor(HMONITOR hMonitor) {
+    //    UINT dpiX = 96, dpiY = 96;
+    //    if (SUCCEEDED(GetDpiForMonitor(hMonitor, MDT_EFFECTIVE_DPI, &dpiX, &dpiY))) {
+    //        return dpiX / 96.0;
+    //    }
+    //    // Fallback for older Windows
+    //    HDC screen = GetDC(NULL);
+    //    int dpi = GetDeviceCaps(screen, LOGPIXELSX);
+    //    ReleaseDC(NULL, screen);
+    //    return dpi / 96.0;
+    //}
+
+    bool setCursorPosition(int x, int y) {
+        // Find the monitor for (x, y)
+        POINT pt = { x, y };
+        HMONITOR hMonitor = MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST);
+        return SetCursorPos(pt.x, pt.y);
+    }
+
+    POINT getCursorPosition()
+    {
+        POINT pt;
+        GetCursorPos(&pt);
+        HMONITOR hMonitor = MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST);
+        return pt;
     }
 
     bool run_python_play_function(const std::string& script_path, const std::string& play_func_name = "play")
@@ -1122,6 +1147,11 @@ static PyObject* chivel_play(PyObject* self, PyObject* args) {
         return nullptr;
     }
 
+    if (!script_path)
+    {
+        Py_RETURN_NONE;
+    }
+
     bool ok = chivel::run_python_play_function(script_path, play_func_name);
     if (!ok) {
         PyErr_SetString(PyExc_RuntimeError, std::format("Failed to run {}() in the given script.", play_func_name).c_str());
@@ -1133,11 +1163,7 @@ static PyObject* chivel_play(PyObject* self, PyObject* args) {
 
 static PyObject* chivel_get_location(PyObject* self, PyObject* args) {
     // Get mouse position in screen coordinates
-    POINT pt;
-    if (!GetCursorPos(&pt)) {
-        PyErr_SetString(PyExc_RuntimeError, "Failed to get mouse position");
-        return nullptr;
-    }
+    POINT pt = chivel::getCursorPosition();
 
     // Find which monitor contains the point
     struct MonitorSearch {
@@ -1211,7 +1237,11 @@ static PyObject* chivel_display_get_rect(PyObject* self, PyObject* args) {
 // Module initialization
 static int chivel_module_exec(PyObject* module)
 {
+    // do not print openCV stuff
     cv::utils::logging::setLogLevel(cv::utils::logging::LOG_LEVEL_SILENT);
+
+    // make process DPI aware for mouse scaling
+    SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
 
     if (PyType_Ready(&CHIVELImageType) < 0)
         return -1;
