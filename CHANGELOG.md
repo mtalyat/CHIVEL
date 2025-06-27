@@ -1,5 +1,8 @@
 # Change log
 
+## 0.4.1
+- Add tessdata folder to build.
+
 ## 0.4.0
 - Fix DPI scaling.
 - Fix Python3 dependency.

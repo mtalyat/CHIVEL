@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name="chivel",
-    version="0.4.0",
+    version="0.4.1",
     description="For easily interfacing with the screen, just as a human would.",
     long_description="Chivel is a Python module that allows you to interact with the screen in a way that mimics human behavior. It provides functions for recording and playing back mouse and keyboard actions, making it useful for automation tasks.",
     author="Mitchell Talyat",
@@ -34,7 +34,8 @@ setup(
         "tiff.dll",
         "turbojpeg.dll",
         "zlib1.dll",
-        "zstd.dll"
+        "zstd.dll",
+        "tessdata/*"
     ]},
     include_package_data=True,
 )
