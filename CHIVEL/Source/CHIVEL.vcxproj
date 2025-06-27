@@ -150,7 +150,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
       <AdditionalLibraryDirectories>..\..\Libraries\python\libs;..\..\Libraries\opencv\lib;..\..\Libraries\tesseractocr\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>python313.lib;opencv_world4110.lib;leptonica-1.85.0.lib;tesseract55.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>python3.lib;opencv_world4110.lib;leptonica-1.85.0.lib;tesseract55.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
       <Command>xcopy /e /k /y /i "$(ProjectDir)module\" "$(TargetDir)"
