@@ -2253,21 +2253,21 @@ static PyObject* chivel_mouse_get_display(PyObject* self, PyObject* args) {
 }
 
 static PyObject* chivel_display_get_rect(PyObject* self, PyObject* args) {
-	int monitor_index = 0;
-	if (!PyArg_ParseTuple(args, "i", &monitor_index))
+	int display_index = 0;
+	if (!PyArg_ParseTuple(args, "|i", &display_index))
 		return nullptr;
 
 	DISPLAY_DEVICE dd;
 	dd.cb = sizeof(dd);
-	if (!EnumDisplayDevices(NULL, monitor_index, &dd, 0)) {
-		PyErr_SetString(PyExc_ValueError, "Invalid monitor index");
+	if (!EnumDisplayDevices(NULL, display_index, &dd, 0)) {
+		PyErr_SetString(PyExc_ValueError, "Invalid display index");
 		return nullptr;
 	}
 
 	DEVMODE dm;
 	dm.dmSize = sizeof(dm);
 	if (!EnumDisplaySettings(dd.DeviceName, ENUM_CURRENT_SETTINGS, &dm)) {
-		PyErr_SetString(PyExc_RuntimeError, "Failed to get monitor settings");
+		PyErr_SetString(PyExc_RuntimeError, "Failed to get display settings");
 		return nullptr;
 	}
 
