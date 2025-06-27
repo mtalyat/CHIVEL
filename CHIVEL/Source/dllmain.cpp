@@ -438,10 +438,10 @@ static PyObject* chivel_show(PyObject* self, PyObject* args) {
 }
 
 static PyObject* chivel_capture(PyObject* self, PyObject* args, PyObject* kwargs) {
-    int monitorIndex = 0;
     PyObject* rect_obj = nullptr;
-    static const char* kwlist[] = { "monitor", "rect", nullptr };
-    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "|iO", (char**)kwlist, &monitorIndex, &rect_obj))
+    int displayIndex = 0;
+    static const char* kwlist[] = { "rect", "display_index", nullptr };
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "|Oi", (char**)kwlist, &rect_obj, &displayIndex))
         return nullptr;
 
     cv::Mat img;
@@ -453,10 +453,10 @@ static PyObject* chivel_capture(PyObject* self, PyObject* args, PyObject* kwargs
             PyErr_SetString(PyExc_TypeError, "rect must be a tuple (x, y, w, h)");
             return nullptr;
         }
-        img = chivel::captureRect(x, y, w, h, monitorIndex);
+        img = chivel::captureRect(x, y, w, h, displayIndex);
     }
     else {
-        img = chivel::captureScreen(monitorIndex);
+        img = chivel::captureScreen(displayIndex);
     }
 
     if (img.empty()) {
@@ -715,17 +715,18 @@ static PyObject* chivel_draw(PyObject* self, PyObject* args, PyObject* kwds) {
     Py_RETURN_NONE;
 }
 
-static PyObject* chivel_mouse_move(PyObject* self, PyObject* args) {
-    int monitor_index;
-    PyObject* pos_obj;
+static PyObject* chivel_mouse_move(PyObject* self, PyObject* args, PyObject* kwds) {
+    PyObject* pos_obj = nullptr;
+    int display_index = 0;
+    static const char* kwlist[] = { "pos", "display_index", nullptr };
 
-    if (!PyArg_ParseTuple(args, "iO", &monitor_index, &pos_obj))
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O|i", (char**)kwlist, &pos_obj, &display_index))
         return nullptr;
 
     // Get monitor info
     DISPLAY_DEVICE dd;
     dd.cb = sizeof(dd);
-    if (!EnumDisplayDevices(NULL, monitor_index, &dd, 0)) {
+    if (!EnumDisplayDevices(NULL, display_index, &dd, 0)) {
         PyErr_SetString(PyExc_ValueError, "Invalid monitor index");
         return nullptr;
     }
@@ -1381,7 +1382,7 @@ static PyMethodDef chivelMethods[] = {
 	{"find", (PyCFunction)chivel_find, METH_VARARGS | METH_KEYWORDS, "Find rectangles or text in an image"},
 	{"draw", (PyCFunction)chivel_draw, METH_VARARGS | METH_KEYWORDS, "Draw rectangle(s) on an image"},
 	{"wait", chivel_wait, METH_VARARGS, "Wait for a specified number of seconds"},
-	{"mouse_move", chivel_mouse_move, METH_VARARGS, "Move the mouse cursor to a position on a specific display"},
+	{"mouse_move", (PyCFunction)chivel_mouse_move, METH_VARARGS | METH_KEYWORDS, "Move the mouse cursor to a specific position or rectangle on a display"},
 	{"mouse_click", (PyCFunction)chivel_mouse_click, METH_VARARGS | METH_KEYWORDS, "Click the mouse button"},
 	{"mouse_down", (PyCFunction)chivel_mouse_down, METH_VARARGS | METH_KEYWORDS, "Press a mouse button down"},
 	{"mouse_up", (PyCFunction)chivel_mouse_up, METH_VARARGS | METH_KEYWORDS, "Release a mouse button"},
