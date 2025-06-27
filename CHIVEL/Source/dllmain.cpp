@@ -530,6 +530,7 @@ static PyObject* CHIVELImage_edge(CHIVELImageObject* self, PyObject* args);
 static PyObject* CHIVELImage_emboss(CHIVELImageObject* self, PyObject* /*unused*/);
 static PyObject* CHIVELImage_split_channels(CHIVELImageObject* self, PyObject* /*unused*/);
 static PyObject* CHIVELImage_merge_channels(PyObject* /*cls*/, PyObject* args);
+static PyObject* CHIVELImage_to_color(CHIVELImageObject* self, PyObject* args);
 
 static PyMethodDef CHIVELImage_methods[] = {
 	{"get_size", (PyCFunction)CHIVELImage_get_size, METH_NOARGS, "Return (width, height) of the image"},
@@ -557,6 +558,7 @@ static PyMethodDef CHIVELImage_methods[] = {
 	{"emboss", (PyCFunction)CHIVELImage_emboss, METH_NOARGS, "Apply an emboss effect to the image"},
 	{"split_channels", (PyCFunction)CHIVELImage_split_channels, METH_NOARGS, "Split the image into its color channels"},
 	{"merge_channels", (PyCFunction)CHIVELImage_merge_channels, METH_CLASS | METH_VARARGS, "Merge multiple single-channel images into a multi-channel image"},
+	{"to_color", (PyCFunction)CHIVELImage_to_color, METH_VARARGS, "Convert the image to a specified color space"},
 	{nullptr, nullptr, 0, nullptr}
 };
 
