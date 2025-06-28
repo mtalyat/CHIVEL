@@ -2,7 +2,7 @@
 
 <img src='Images/icon.png' alt='The CHIVEL logo.' width=200px>
 
-CHIVEL, previously known as CHISL (Computer-Human Interaction Scripting Language) is a Python extension meant for controlling your device. It provides simple interfaces for finding things on the screen, controlling the keyboard/mouse, and more. This was originally its own scripting language, but was later revamped into a Python module, so that the powerful features of Python could be used in addition to the computer vision that CHIVEL provides. The project was also renamed from CHISL to CHIVEL, as CHISL was already taken on PyPI.
+CHIVEL, previously known as CHISL (Computer-Human Interaction Scripting Language) is a Python extension meant for controlling your device. It provides simple interfaces for finding things on the screen, controlling the keyboard/mouse, manipulating images, and more. This was originally its own scripting language, but was later revamped into a Python module, so that the powerful features of Python could be used in addition to the computer vision that CHIVEL provides. The project was also renamed from CHISL to CHIVEL, as CHISL was already taken on PyPI.
 
 ## How To Use
 
@@ -16,7 +16,7 @@ Import chivel and have at it!
 
     import chivel
     x = chivel.load("x.png")
-    screen = chivel.capture(0)
+    screen = chivel.capture()
     matches = chivel.find(screen, x)
     for match in matches:
         chivel.mouse_move(match)
@@ -24,14 +24,14 @@ Import chivel and have at it!
 
 ## Features
 
+Here is a list of functions that CHIVEL has to offer.
+
 | Function | Description |
 | --- | --- |
 | load(path) | Load an image from a file |
 | save(image, path) | Save an image to a file |
-| show(image, name?) | Show an image in a window |
 | capture(display_index=0, rect?) | Capture all or part of a screen |
 | find(image, image/text, threshold=0.8, text_level=TEXT_PARAGRAPH) | Finds an image template or some text within the given image |
-| draw(image, rectangle/rectangles) | Draw rectangle(s) on an image |
 | wait(seconds) | Wait for a specified number of seconds |
 | mouse_move(display_index, position/rect) | Moves to the position (or center of the rect) on the given display |
 | mouse_click(button=0, count=1) | Click the mouse button |

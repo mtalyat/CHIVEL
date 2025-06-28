@@ -1,5 +1,10 @@
 # Change log
 
+## 0.5.0
+- Create Point, Rect, Color, and Match types.
+    - Replace existing function arguments with the appropriate types.
+- Rename to_color to convert.
+
 ## 0.4.1
 - Add tessdata folder to build.
 

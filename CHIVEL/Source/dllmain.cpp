@@ -7,6 +7,7 @@
 #include <Python.h>
 #include <Windows.h>
 #include <ShellScalingAPI.h> // For GetDpiForMonitor
+#include <structmember.h>
 #pragma comment(lib, "Shcore.lib")
 #include <filesystem>
 #include <regex>
@@ -467,6 +468,453 @@ namespace chivel
 
 #pragma region Python
 
+#pragma region Point
+
+typedef struct {
+	PyObject_HEAD
+		int x;
+	int y;
+} CHIVELPointObject;
+
+static void CHIVELPoint_dealloc(CHIVELPointObject* self) {
+	Py_TYPE(self)->tp_free((PyObject*)self);
+}
+
+static PyObject* CHIVELPoint_new(PyTypeObject* type, PyObject* args, PyObject* kwds) {
+	CHIVELPointObject* self = (CHIVELPointObject*)type->tp_alloc(type, 0);
+	if (self) {
+		self->x = 0;
+		self->y = 0;
+	}
+	return (PyObject*)self;
+}
+
+static int CHIVELPoint_init(CHIVELPointObject* self, PyObject* args, PyObject* kwds) {
+	static const char* kwlist[] = { "x", "y", nullptr };
+	if (!PyArg_ParseTupleAndKeywords(args, kwds, "ii", (char**)kwlist, &self->x, &self->y))
+		return -1;
+	return 0;
+}
+
+static PyObject* CHIVELPoint_repr(CHIVELPointObject* self) {
+	return PyUnicode_FromFormat("(%d, %d)", self->x, self->y);
+}
+
+static PyMemberDef CHIVELPoint_members[] = {
+	{"x", T_INT, offsetof(CHIVELPointObject, x), 0, "x coordinate"},
+	{"y", T_INT, offsetof(CHIVELPointObject, y), 0, "y coordinate"},
+	{nullptr}
+};
+
+static PyTypeObject CHIVELPointType = {
+	PyVarObject_HEAD_INIT(NULL, 0)
+	"chivel.Point",
+	sizeof(CHIVELPointObject),
+	0,
+	(destructor)CHIVELPoint_dealloc,
+	0,
+	0,
+	0,
+	0,
+	(reprfunc)CHIVELPoint_repr,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
+	"Chivel Point objects",
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	CHIVELPoint_members,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	(initproc)CHIVELPoint_init,
+	0,
+	CHIVELPoint_new,
+};
+
+static PyObject* create_point(int x, int y) {
+	PyObject* point_obj = CHIVELPoint_new(&CHIVELPointType, nullptr, nullptr);
+	if (!point_obj)
+		return nullptr;
+	CHIVELPointObject* point = (CHIVELPointObject*)point_obj;
+	point->x = x;
+	point->y = y;
+	return point_obj;
+}
+
+#pragma endregion
+
+#pragma region Rect
+
+typedef struct {
+	PyObject_HEAD
+		int x;
+	int y;
+	int width;
+	int height;
+} CHIVELRectObject;
+
+static void CHIVELRect_dealloc(CHIVELRectObject* self) {
+	Py_TYPE(self)->tp_free((PyObject*)self);
+}
+
+static PyObject* CHIVELRect_new(PyTypeObject* type, PyObject* args, PyObject* kwds) {
+	CHIVELRectObject* self = (CHIVELRectObject*)type->tp_alloc(type, 0);
+	if (self) {
+		self->x = 0;
+		self->y = 0;
+		self->width = 0;
+		self->height = 0;
+	}
+	return (PyObject*)self;
+}
+
+static int CHIVELRect_init(CHIVELRectObject* self, PyObject* args, PyObject* kwds) {
+	static const char* kwlist[] = { "x", "y", "width", "height", nullptr };
+	if (!PyArg_ParseTupleAndKeywords(args, kwds, "iiii", (char**)kwlist,
+		&self->x, &self->y, &self->width, &self->height))
+		return -1;
+	return 0;
+}
+
+static PyObject* CHIVELRect_repr(CHIVELRectObject* self) {
+	return PyUnicode_FromFormat("(%d, %d, %d, %d)", self->x, self->y, self->width, self->height);
+}
+
+// Returns a chivel.Point (x, y)
+static PyObject* CHIVELRect_get_position(CHIVELRectObject* self, PyObject* /*unused*/) {
+	return create_point(self->x, self->y);
+}
+
+// Returns a chivel.Point (width, height)
+static PyObject* CHIVELRect_get_size(CHIVELRectObject* self, PyObject* /*unused*/) {
+	return create_point(self->width, self->height);
+}
+
+static PyMethodDef CHIVELRect_methods[] = {
+	{"get_position", (PyCFunction)CHIVELRect_get_position, METH_NOARGS, "Return (x, y) as a chivel.Point"},
+	{"get_size", (PyCFunction)CHIVELRect_get_size, METH_NOARGS, "Return (width, height) as a chivel.Point"},
+	{nullptr, nullptr, 0, nullptr}
+};
+
+static PyMemberDef CHIVELRect_members[] = {
+	{"x", T_INT, offsetof(CHIVELRectObject, x), 0, "x coordinate"},
+	{"y", T_INT, offsetof(CHIVELRectObject, y), 0, "y coordinate"},
+	{"width", T_INT, offsetof(CHIVELRectObject, width), 0, "width"},
+	{"height", T_INT, offsetof(CHIVELRectObject, height), 0, "height"},
+	{nullptr}
+};
+
+static PyTypeObject CHIVELRectType = {
+	PyVarObject_HEAD_INIT(NULL, 0)
+	"chivel.Rect",
+	sizeof(CHIVELRectObject),
+	0,
+	(destructor)CHIVELRect_dealloc,
+	0,
+	0,
+	0,
+	0,
+	(reprfunc)CHIVELRect_repr,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
+	"Chivel Rect objects",
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	CHIVELRect_methods,
+	CHIVELRect_members,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	(initproc)CHIVELRect_init,
+	0,
+	CHIVELRect_new,
+};
+
+static PyObject* create_rect(int x, int y, int width, int height) {
+	PyObject* rect_obj = CHIVELRect_new(&CHIVELRectType, nullptr, nullptr);
+	if (!rect_obj)
+		return nullptr;
+	CHIVELRectObject* rect = (CHIVELRectObject*)rect_obj;
+	rect->x = x;
+	rect->y = y;
+	rect->width = width;
+	rect->height = height;
+	return rect_obj;
+}
+
+#pragma endregion
+
+#pragma region Match
+
+typedef struct {
+	PyObject_HEAD
+		PyObject* rect;   // CHIVELRectObject*
+	PyObject* label;  // PyUnicode or Py_None
+} CHIVELMatchObject;
+
+static void CHIVELMatch_dealloc(CHIVELMatchObject* self) {
+	Py_XDECREF(self->rect);
+	Py_XDECREF(self->label);
+	Py_TYPE(self)->tp_free((PyObject*)self);
+}
+
+static PyObject* CHIVELMatch_new(PyTypeObject* type, PyObject* args, PyObject* kwds) {
+	CHIVELMatchObject* self = (CHIVELMatchObject*)type->tp_alloc(type, 0);
+	if (self) {
+		self->rect = Py_None;
+		Py_INCREF(Py_None);
+		self->label = Py_None;
+		Py_INCREF(Py_None);
+	}
+	return (PyObject*)self;
+}
+
+static int CHIVELMatch_init(CHIVELMatchObject* self, PyObject* args, PyObject* kwds) {
+	PyObject* rect = NULL;
+	PyObject* label = Py_None;
+	static const char* kwlist[] = { "rect", "label", nullptr };
+	if (!PyArg_ParseTupleAndKeywords(args, kwds, "O|O", (char**)kwlist, &rect, &label))
+		return -1;
+	if (!PyObject_TypeCheck(rect, &CHIVELRectType)) {
+		PyErr_SetString(PyExc_TypeError, "rect must be a chivel.Rect");
+		return -1;
+	}
+	Py_INCREF(rect);
+	Py_XDECREF(self->rect);
+	self->rect = rect;
+	Py_XDECREF(self->label);
+	if (label == NULL) label = Py_None;
+	Py_INCREF(label);
+	self->label = label;
+	return 0;
+}
+
+static PyObject* CHIVELMatch_repr(CHIVELMatchObject* self) {
+	PyObject* rect_repr = NULL;
+	PyObject* label_repr = NULL;
+	PyObject* result = NULL;
+
+	// Get repr for rect
+	if (self->rect && PyObject_HasAttrString(self->rect, "__repr__")) {
+		rect_repr = PyObject_Repr(self->rect);
+	}
+	else {
+		rect_repr = PyUnicode_FromString("None");
+	}
+
+	// If label is None, just return "(<rect_repr>)"
+	if (!self->label || self->label == Py_None) {
+		if (rect_repr) {
+			result = PyUnicode_FromFormat("(%U)", rect_repr);
+		}
+		Py_XDECREF(rect_repr);
+		return result;
+	}
+
+	// Get repr for label
+	label_repr = PyObject_Repr(self->label);
+
+	if (rect_repr && label_repr) {
+		result = PyUnicode_FromFormat("(%U, \"%U\")", rect_repr, label_repr);
+	}
+
+	Py_XDECREF(rect_repr);
+	Py_XDECREF(label_repr);
+	return result;
+}
+
+static PyMemberDef CHIVELMatch_members[] = {
+	{"rect", T_OBJECT_EX, offsetof(CHIVELMatchObject, rect), 0, "rect (chivel.Rect)"},
+	{"label", T_OBJECT, offsetof(CHIVELMatchObject, label), 0, "label (str or None)"},
+	{nullptr}
+};
+
+static PyTypeObject CHIVELMatchType = {
+	PyVarObject_HEAD_INIT(NULL, 0)
+	"chivel.Match",
+	sizeof(CHIVELMatchObject),
+	0,
+	(destructor)CHIVELMatch_dealloc,
+	0,
+	0,
+	0,
+	0,
+	(reprfunc)CHIVELMatch_repr,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
+	"Chivel Match objects",
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	CHIVELMatch_members,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	(initproc)CHIVELMatch_init,
+	0,
+	CHIVELMatch_new,
+};
+
+static PyObject* create_match(PyObject* rect_obj, PyObject* label_obj = Py_None) {
+    if (!PyObject_TypeCheck(rect_obj, &CHIVELRectType)) {
+        PyErr_SetString(PyExc_TypeError, "rect must be a chivel.Rect object");
+        return nullptr;
+    }
+    if (label_obj == nullptr) {
+        label_obj = Py_None;
+    }
+    PyObject* match_obj = CHIVELMatch_new(&CHIVELMatchType, nullptr, nullptr);
+    if (!match_obj)
+        return nullptr;
+    CHIVELMatchObject* match = (CHIVELMatchObject*)match_obj;
+    Py_XDECREF(match->rect);
+    Py_INCREF(rect_obj);
+    match->rect = rect_obj;
+    Py_XDECREF(match->label);
+    Py_INCREF(label_obj);
+    match->label = label_obj;
+    return match_obj;
+}
+
+#pragma endregion
+
+#pragma region Color
+
+typedef struct {
+	PyObject_HEAD
+		int r;
+	int g;
+	int b;
+	int a;
+} CHIVELColorObject;
+
+static void CHIVELColor_dealloc(CHIVELColorObject* self) {
+	Py_TYPE(self)->tp_free((PyObject*)self);
+}
+
+static PyObject* CHIVELColor_new(PyTypeObject* type, PyObject* args, PyObject* kwds) {
+	CHIVELColorObject* self = (CHIVELColorObject*)type->tp_alloc(type, 0);
+	if (self) {
+		self->r = 0;
+		self->g = 0;
+		self->b = 0;
+		self->a = 255;
+	}
+	return (PyObject*)self;
+}
+
+static int CHIVELColor_init(CHIVELColorObject* self, PyObject* args, PyObject* kwds) {
+	static const char* kwlist[] = { "r", "g", "b", "a", nullptr };
+	self->r = 0;
+	self->g = 0;
+	self->b = 0;
+	self->a = 255;
+	if (!PyArg_ParseTupleAndKeywords(args, kwds, "iii|i", (char**)kwlist, &self->r, &self->g, &self->b, &self->a))
+		return -1;
+	return 0;
+}
+
+static PyObject* CHIVELColor_repr(CHIVELColorObject* self) {
+	return PyUnicode_FromFormat("(%d, %d, %d, %d)", self->r, self->g, self->b, self->a);
+}
+
+static PyMemberDef CHIVELColor_members[] = {
+	{"r", T_INT, offsetof(CHIVELColorObject, r), 0, "red component"},
+	{"g", T_INT, offsetof(CHIVELColorObject, g), 0, "green component"},
+	{"b", T_INT, offsetof(CHIVELColorObject, b), 0, "blue component"},
+	{"a", T_INT, offsetof(CHIVELColorObject, a), 0, "alpha component"},
+	{nullptr}
+};
+
+static PyTypeObject CHIVELColorType = {
+	PyVarObject_HEAD_INIT(NULL, 0)
+	"chivel.Color",
+	sizeof(CHIVELColorObject),
+	0,
+	(destructor)CHIVELColor_dealloc,
+	0,
+	0,
+	0,
+	0,
+	(reprfunc)CHIVELColor_repr,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
+	"Chivel Color objects",
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	CHIVELColor_members,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	(initproc)CHIVELColor_init,
+	0,
+	CHIVELColor_new,
+};
+
+#pragma endregion
+
 #pragma region Image
 
 typedef struct {
@@ -560,7 +1008,7 @@ static PyObject* CHIVELImage_edge(CHIVELImageObject* self, PyObject* args);
 static PyObject* CHIVELImage_emboss(CHIVELImageObject* self, PyObject* /*unused*/);
 static PyObject* CHIVELImage_split(CHIVELImageObject* self, PyObject* /*unused*/);
 static PyObject* CHIVELImage_merge(PyObject* /*cls*/, PyObject* args);
-static PyObject* CHIVELImage_to_color(CHIVELImageObject* self, PyObject* args);
+static PyObject* CHIVELImage_convert(CHIVELImageObject* self, PyObject* args);
 static PyObject* CHIVELImage_range(CHIVELImageObject* self, PyObject* args);
 static PyObject* CHIVELImage_mask(CHIVELImageObject* self, PyObject* args);
 
@@ -591,7 +1039,7 @@ static PyMethodDef CHIVELImage_methods[] = {
 	{"emboss", (PyCFunction)CHIVELImage_emboss, METH_NOARGS, "Apply an emboss effect to the image"},
 	{"split", (PyCFunction)CHIVELImage_split, METH_NOARGS, "Split the image into its color channels"},
 	{"merge", (PyCFunction)CHIVELImage_merge, METH_VARARGS, "Merge multiple channel images into a single image"},
-	{"to_color", (PyCFunction)CHIVELImage_to_color, METH_VARARGS, "Convert the image to a specified color space"},
+	{"convert", (PyCFunction)CHIVELImage_convert, METH_VARARGS, "Convert the image to a specified color space"},
 	{"range", (PyCFunction)CHIVELImage_range, METH_VARARGS, "Check if the image is within a specified color range"},
 	{"mask", (PyCFunction)CHIVELImage_mask, METH_VARARGS, "Apply a mask to the image"},
 	{nullptr, nullptr, 0, nullptr}
@@ -646,7 +1094,8 @@ static PyObject* CHIVELImage_get_size(CHIVELImageObject* self, PyObject* /*unuse
 	}
 	int width = self->mat->cols;
 	int height = self->mat->rows;
-	return Py_BuildValue("(ii)", width, height);
+
+	return create_point(width, height);
 }
 
 static PyObject* CHIVELImage_show(CHIVELImageObject* self, PyObject* args, PyObject* kwargs) {
@@ -685,17 +1134,19 @@ static PyObject* CHIVELImage_clone(CHIVELImageObject* self, PyObject* /*unused*/
 }
 
 static PyObject* CHIVELImage_crop(CHIVELImageObject* self, PyObject* args) {
-	int x, y, w, h;
 	PyObject* rect_obj = nullptr;
 	if (!PyArg_ParseTuple(args, "O", &rect_obj))
 		return nullptr;
 
-	if (!PyTuple_Check(rect_obj) || PyTuple_Size(rect_obj) != 4) {
-		PyErr_SetString(PyExc_TypeError, "Argument must be a tuple (x, y, w, h)");
+	if (!PyObject_TypeCheck(rect_obj, &CHIVELRectType)) {
+		PyErr_SetString(PyExc_TypeError, "Argument must be a chivel.Rect object");
 		return nullptr;
 	}
-	if (!PyArg_ParseTuple(rect_obj, "iiii", &x, &y, &w, &h))
-		return nullptr;
+	CHIVELRectObject* rect = (CHIVELRectObject*)rect_obj;
+	int x = rect->x;
+	int y = rect->y;
+	int w = rect->width;
+	int h = rect->height;
 
 	if (!self->mat || self->mat->empty()) {
 		PyErr_SetString(PyExc_ValueError, "Image data is empty");
@@ -843,18 +1294,18 @@ static PyObject* CHIVELImage_flip(CHIVELImageObject* self, PyObject* args) {
 }
 
 static PyObject* CHIVELImage_resize(CHIVELImageObject* self, PyObject* args) {
-	PyObject* size_obj = nullptr;
-	if (!PyArg_ParseTuple(args, "O", &size_obj))
+	PyObject* point_obj = nullptr;
+	if (!PyArg_ParseTuple(args, "O", &point_obj))
 		return nullptr;
 
-	if (!PyTuple_Check(size_obj) || PyTuple_Size(size_obj) != 2) {
-		PyErr_SetString(PyExc_TypeError, "Argument must be a tuple (width, height)");
+	if (!PyObject_TypeCheck(point_obj, &CHIVELPointType)) {
+		PyErr_SetString(PyExc_TypeError, "Argument must be a chivel.Point object");
 		return nullptr;
 	}
 
-	int width = 0, height = 0;
-	if (!PyArg_ParseTuple(size_obj, "ii", &width, &height))
-		return nullptr;
+	CHIVELPointObject* point = (CHIVELPointObject*)point_obj;
+	int width = point->x;
+	int height = point->y;
 
 	if (!self->mat || self->mat->empty()) {
 		PyErr_SetString(PyExc_ValueError, "Image data is empty");
@@ -886,16 +1337,16 @@ static PyObject* CHIVELImage_draw_rect(CHIVELImageObject* self, PyObject* args, 
 		return nullptr;
 	}
 
-	// Parse rect tuple
-	int x, y, w, h;
-	if (!PyTuple_Check(rect_obj) || PyTuple_Size(rect_obj) != 4) {
-		PyErr_SetString(PyExc_TypeError, "rect must be a tuple of 4 integers (x, y, w, h)");
+	// Parse rect as chivel.Rect
+	if (!PyObject_TypeCheck(rect_obj, &CHIVELRectType)) {
+		PyErr_SetString(PyExc_TypeError, "rect must be a chivel.Rect object");
 		return nullptr;
 	}
-	if (!PyArg_ParseTuple(rect_obj, "iiii", &x, &y, &w, &h)) {
-		PyErr_SetString(PyExc_TypeError, "rect must be a tuple of 4 integers (x, y, w, h)");
-		return nullptr;
-	}
+	CHIVELRectObject* rect = (CHIVELRectObject*)rect_obj;
+	int x = rect->x;
+	int y = rect->y;
+	int w = rect->width;
+	int h = rect->height;
 	if (w <= 0 || h <= 0) {
 		PyErr_SetString(PyExc_ValueError, "Width and height must be positive");
 		return nullptr;
@@ -903,13 +1354,9 @@ static PyObject* CHIVELImage_draw_rect(CHIVELImageObject* self, PyObject* args, 
 
 	// Default color: red (BGR: 0,0,255)
 	cv::Scalar color(0, 0, 255);
-	if (color_obj && PyTuple_Check(color_obj) && PyTuple_Size(color_obj) == 3) {
-		int r = 0, g = 0, b = 0;
-		if (!PyArg_ParseTuple(color_obj, "iii", &r, &g, &b)) {
-			PyErr_SetString(PyExc_TypeError, "Color must be a tuple of 3 integers (R, G, B)");
-			return nullptr;
-		}
-		color = cv::Scalar(b, g, r);
+	if (color_obj && PyObject_TypeCheck(color_obj, &CHIVELColorType)) {
+		CHIVELColorObject* col = (CHIVELColorObject*)color_obj;
+		color = cv::Scalar(col->b, col->g, col->r);
 	}
 
 	if (thickness < 1) {
@@ -923,11 +1370,11 @@ static PyObject* CHIVELImage_draw_rect(CHIVELImageObject* self, PyObject* args, 
 }
 
 static PyObject* CHIVELImage_draw_matches(CHIVELImageObject* self, PyObject* args, PyObject* kwargs) {
-	PyObject* rects_obj = nullptr;
+	PyObject* matches_obj = nullptr;
 	PyObject* color_obj = nullptr;
 	int thickness = 2;
 	static const char* kwlist[] = { "rects", "color", "thickness", nullptr };
-	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O|Oi", (char**)kwlist, &rects_obj, &color_obj, &thickness))
+	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O|Oi", (char**)kwlist, &matches_obj, &color_obj, &thickness))
 		return nullptr;
 
 	if (!self->mat || self->mat->empty()) {
@@ -935,20 +1382,16 @@ static PyObject* CHIVELImage_draw_matches(CHIVELImageObject* self, PyObject* arg
 		return nullptr;
 	}
 
-	if (!PyList_Check(rects_obj)) {
-		PyErr_SetString(PyExc_TypeError, "rects must be a list of (x, y, w, h) tuples");
+	if (!PyList_Check(matches_obj)) {
+		PyErr_SetString(PyExc_TypeError, "rects must be a list of chivel.Match objects");
 		return nullptr;
 	}
 
 	// Default color: red (BGR: 0,0,255)
 	cv::Scalar color(0, 0, 255);
-	if (color_obj && PyTuple_Check(color_obj) && PyTuple_Size(color_obj) == 3) {
-		int r = 0, g = 0, b = 0;
-		if (!PyArg_ParseTuple(color_obj, "iii", &r, &g, &b)) {
-			PyErr_SetString(PyExc_TypeError, "Color must be a tuple of 3 integers (R, G, B)");
-			return nullptr;
-		}
-		color = cv::Scalar(b, g, r);
+	if (color_obj && PyObject_TypeCheck(color_obj, &CHIVELColorType)) {
+		CHIVELColorObject* col = (CHIVELColorObject*)color_obj;
+		color = cv::Scalar(col->b, col->g, col->r);
 	}
 
 	if (thickness < 1) {
@@ -956,25 +1399,28 @@ static PyObject* CHIVELImage_draw_matches(CHIVELImageObject* self, PyObject* arg
 		return nullptr;
 	}
 
-    Py_ssize_t n = PyList_Size(rects_obj);
-    for (Py_ssize_t i = 0; i < n; ++i) {
-    PyObject* rect_obj = PyList_GetItem(rects_obj, i); // Borrowed reference
-    if (!PyTuple_Check(rect_obj) || (PyTuple_Size(rect_obj) != 4 && PyTuple_Size(rect_obj) != 5)) {
-    PyErr_SetString(PyExc_TypeError, "Each rect must be a tuple of 4 or 5 elements (x, y, w, h[, label])");
-    return nullptr;
-    }
-    int x, y, w, h;
-	PyObject* label_obj = nullptr;
-    // Accept 4 or 5 elements, ignore the 5th if present
-    if (!PyArg_ParseTuple(rect_obj, "iiii|O", &x, &y, &w, &h, &label_obj)) {
-    PyErr_SetString(PyExc_TypeError, "Each rect must start with 4 integers (x, y, w, h)");
-    return nullptr;
-    }
-    if (w <= 0 || h <= 0) {
-    continue; // Skip invalid rectangles
-    }
-    cv::rectangle(*self->mat, cv::Rect(x, y, w, h), color, thickness);
-    }
+	Py_ssize_t n = PyList_Size(matches_obj);
+	for (Py_ssize_t i = 0; i < n; ++i) {
+		PyObject* match_obj = PyList_GetItem(matches_obj, i); // Borrowed reference
+		if (!PyObject_TypeCheck(match_obj, &CHIVELMatchType)) {
+			PyErr_SetString(PyExc_TypeError, "Each item must be a chivel.Match object");
+			return nullptr;
+		}
+		CHIVELMatchObject* match = (CHIVELMatchObject*)match_obj;
+		if (!match->rect || !PyObject_TypeCheck(match->rect, &CHIVELRectType)) {
+			PyErr_SetString(PyExc_TypeError, "Match.rect must be a chivel.Rect object");
+			return nullptr;
+		}
+		CHIVELRectObject* rect = (CHIVELRectObject*)match->rect;
+		int x = rect->x;
+		int y = rect->y;
+		int w = rect->width;
+		int h = rect->height;
+		if (w <= 0 || h <= 0) {
+			continue; // Skip invalid rectangles
+		}
+		cv::rectangle(*self->mat, cv::Rect(x, y, w, h), color, thickness);
+	}
 
 	Py_RETURN_NONE;
 }
@@ -993,28 +1439,23 @@ static PyObject* CHIVELImage_draw_line(CHIVELImageObject* self, PyObject* args, 
 		return nullptr;
 	}
 
-	// Parse start and end tuples
-	int x1, y1, x2, y2;
-	if (!PyTuple_Check(start_obj) || PyTuple_Size(start_obj) != 2 ||
-		!PyArg_ParseTuple(start_obj, "ii", &x1, &y1)) {
-		PyErr_SetString(PyExc_TypeError, "start must be a tuple of 2 integers (x, y)");
+	// Parse start and end as chivel.Point objects
+	if (!PyObject_TypeCheck(start_obj, &CHIVELPointType) || !PyObject_TypeCheck(end_obj, &CHIVELPointType)) {
+		PyErr_SetString(PyExc_TypeError, "start and end must be chivel.Point objects");
 		return nullptr;
 	}
-	if (!PyTuple_Check(end_obj) || PyTuple_Size(end_obj) != 2 ||
-		!PyArg_ParseTuple(end_obj, "ii", &x2, &y2)) {
-		PyErr_SetString(PyExc_TypeError, "end must be a tuple of 2 integers (x, y)");
-		return nullptr;
-	}
+	CHIVELPointObject* start = (CHIVELPointObject*)start_obj;
+	CHIVELPointObject* end = (CHIVELPointObject*)end_obj;
+	int x1 = start->x;
+	int y1 = start->y;
+	int x2 = end->x;
+	int y2 = end->y;
 
 	// Default color: red (BGR: 0,0,255)
 	cv::Scalar color(0, 0, 255);
-	if (color_obj && PyTuple_Check(color_obj) && PyTuple_Size(color_obj) == 3) {
-		int r = 0, g = 0, b = 0;
-		if (!PyArg_ParseTuple(color_obj, "iii", &r, &g, &b)) {
-			PyErr_SetString(PyExc_TypeError, "Color must be a tuple of 3 integers (R, G, B)");
-			return nullptr;
-		}
-		color = cv::Scalar(b, g, r);
+	if (color_obj && PyObject_TypeCheck(color_obj, &CHIVELColorType)) {
+		CHIVELColorObject* col = (CHIVELColorObject*)color_obj;
+		color = cv::Scalar(col->b, col->g, col->r);
 	}
 
 	if (thickness < 1) {
@@ -1041,15 +1482,16 @@ static PyObject* CHIVELImage_draw_text(CHIVELImageObject* self, PyObject* args, 
 		PyErr_SetString(PyExc_ValueError, "Image data is empty");
 		return nullptr;
 	}
-	if (!PyTuple_Check(pos_obj) || PyTuple_Size(pos_obj) != 2) {
-		PyErr_SetString(PyExc_TypeError, "pos must be a tuple of 2 integers (x, y)");
+
+	// Parse pos as chivel.Point
+	if (!PyObject_TypeCheck(pos_obj, &CHIVELPointType)) {
+		PyErr_SetString(PyExc_TypeError, "pos must be a chivel.Point object");
 		return nullptr;
 	}
-	int x, y;
-	if (!PyArg_ParseTuple(pos_obj, "ii", &x, &y)) {
-		PyErr_SetString(PyExc_TypeError, "pos must be a tuple of 2 integers (x, y)");
-		return nullptr;
-	}
+	CHIVELPointObject* point = (CHIVELPointObject*)pos_obj;
+	int x = point->x;
+	int y = point->y;
+
 	if (font_size <= 0) {
 		PyErr_SetString(PyExc_ValueError, "font_size must be positive");
 		return nullptr;
@@ -1057,13 +1499,9 @@ static PyObject* CHIVELImage_draw_text(CHIVELImageObject* self, PyObject* args, 
 
 	// Default color: red (BGR: 0,0,255)
 	cv::Scalar color(0, 0, 255);
-	if (color_obj && PyTuple_Check(color_obj) && PyTuple_Size(color_obj) == 3) {
-		int r = 0, g = 0, b = 0;
-		if (!PyArg_ParseTuple(color_obj, "iii", &r, &g, &b)) {
-			PyErr_SetString(PyExc_TypeError, "Color must be a tuple of 3 integers (R, G, B)");
-			return nullptr;
-		}
-		color = cv::Scalar(b, g, r);
+	if (color_obj && PyObject_TypeCheck(color_obj, &CHIVELColorType)) {
+		CHIVELColorObject* col = (CHIVELColorObject*)color_obj;
+		color = cv::Scalar(col->b, col->g, col->r);
 	}
 
 	// Use OpenCV's Hershey font, scale to match font_size in pixels
@@ -1093,23 +1531,20 @@ static PyObject* CHIVELImage_draw_ellipse(CHIVELImageObject* self, PyObject* arg
 		return nullptr;
 	}
 
-	// Parse center
-	int cx, cy;
-	if (!PyTuple_Check(center_obj) || PyTuple_Size(center_obj) != 2 ||
-		!PyArg_ParseTuple(center_obj, "ii", &cx, &cy)) {
-		PyErr_SetString(PyExc_TypeError, "center must be a tuple of 2 integers (x, y)");
+	// Parse center as chivel.Point
+	if (!PyObject_TypeCheck(center_obj, &CHIVELPointType)) {
+		PyErr_SetString(PyExc_TypeError, "center must be a chivel.Point object");
 		return nullptr;
 	}
+	CHIVELPointObject* center = (CHIVELPointObject*)center_obj;
+	int cx = center->x;
+	int cy = center->y;
 
 	// Default color: red (BGR: 0,0,255)
 	cv::Scalar color(0, 0, 255);
-	if (color_obj && PyTuple_Check(color_obj) && PyTuple_Size(color_obj) == 3) {
-		int r = 0, g = 0, b = 0;
-		if (!PyArg_ParseTuple(color_obj, "iii", &r, &g, &b)) {
-			PyErr_SetString(PyExc_TypeError, "Color must be a tuple of 3 integers (R, G, B)");
-			return nullptr;
-		}
-		color = cv::Scalar(b, g, r);
+	if (color_obj && PyObject_TypeCheck(color_obj, &CHIVELColorType)) {
+		CHIVELColorObject* col = (CHIVELColorObject*)color_obj;
+		color = cv::Scalar(col->b, col->g, col->r);
 	}
 
 	if (PyLong_Check(radius_or_axes_obj)) {
@@ -1163,15 +1598,13 @@ static PyObject* CHIVELImage_draw_image(CHIVELImageObject* self, PyObject* args,
 		PyErr_SetString(PyExc_ValueError, "Source image data is empty");
 		return nullptr;
 	}
-	if (!PyTuple_Check(pos_obj) || PyTuple_Size(pos_obj) != 2) {
-		PyErr_SetString(PyExc_TypeError, "pos must be a tuple of 2 integers (x, y)");
+	if (!PyObject_TypeCheck(pos_obj, &CHIVELPointType)) {
+		PyErr_SetString(PyExc_TypeError, "pos must be a chivel.Point object");
 		return nullptr;
 	}
-	int x, y;
-	if (!PyArg_ParseTuple(pos_obj, "ii", &x, &y)) {
-		PyErr_SetString(PyExc_TypeError, "pos must be a tuple of 2 integers (x, y)");
-		return nullptr;
-	}
+	CHIVELPointObject* point = (CHIVELPointObject*)pos_obj;
+	int x = point->x;
+	int y = point->y;
 	if (alpha < 0.0 || alpha > 1.0) {
 		PyErr_SetString(PyExc_ValueError, "alpha must be between 0.0 and 1.0");
 		return nullptr;
@@ -1562,7 +1995,7 @@ static PyObject* CHIVELImage_merge(PyObject* self, PyObject* args) {
 	Py_RETURN_NONE;
 }
 
-static PyObject* CHIVELImage_to_color(CHIVELImageObject* self, PyObject* args) {
+static PyObject* CHIVELImage_convert(CHIVELImageObject* self, PyObject* args) {
 	int target_space = COLOR_SPACE_BGR;
 	static const char* kwlist[] = { "color_space", nullptr };
 	if (!PyArg_ParseTuple(args, "i", (char**)kwlist, &target_space))
@@ -1605,27 +2038,42 @@ static PyObject* CHIVELImage_range(CHIVELImageObject* self, PyObject* args) {
 		return nullptr;
 	}
 
-	// Parse lower and upper bounds (expect 3-tuple)
-	if (!PyTuple_Check(lower_obj) || !PyTuple_Check(upper_obj) ||
-		PyTuple_Size(lower_obj) != 3 || PyTuple_Size(upper_obj) != 3) {
-		PyErr_SetString(PyExc_TypeError, "lower and upper must be 3-element tuples");
-		return nullptr;
-	}
+	// Accept either chivel.Color or 3-tuple for lower and upper
 	int l0, l1, l2, u0, u1, u2;
-	if (!PyArg_ParseTuple(lower_obj, "iii", &l0, &l1, &l2) ||
-		!PyArg_ParseTuple(upper_obj, "iii", &u0, &u1, &u2)) {
-		PyErr_SetString(PyExc_TypeError, "lower and upper must be 3-element tuples of ints");
+	if (PyObject_TypeCheck(lower_obj, &CHIVELColorType)) {
+		CHIVELColorObject* col = (CHIVELColorObject*)lower_obj;
+		l0 = col->b; l1 = col->g; l2 = col->r;
+	}
+	else if (PyTuple_Check(lower_obj) && PyTuple_Size(lower_obj) == 3) {
+		if (!PyArg_ParseTuple(lower_obj, "iii", &l0, &l1, &l2)) {
+			PyErr_SetString(PyExc_TypeError, "lower must be a chivel.Color or 3-tuple of ints");
+			return nullptr;
+		}
+	}
+	else {
+		PyErr_SetString(PyExc_TypeError, "lower must be a chivel.Color or 3-tuple of ints");
 		return nullptr;
 	}
 
-	// Convert to requested color space if needed
-	cv::Mat input = *self->mat;
+	if (PyObject_TypeCheck(upper_obj, &CHIVELColorType)) {
+		CHIVELColorObject* col = (CHIVELColorObject*)upper_obj;
+		u0 = col->b; u1 = col->g; u2 = col->r;
+	}
+	else if (PyTuple_Check(upper_obj) && PyTuple_Size(upper_obj) == 3) {
+		if (!PyArg_ParseTuple(upper_obj, "iii", &u0, &u1, &u2)) {
+			PyErr_SetString(PyExc_TypeError, "upper must be a chivel.Color or 3-tuple of ints");
+			return nullptr;
+		}
+	}
+	else {
+		PyErr_SetString(PyExc_TypeError, "upper must be a chivel.Color or 3-tuple of ints");
+		return nullptr;
+	}
 
-	// Apply inRange
+	cv::Mat input = *self->mat;
 	cv::Mat mask;
 	cv::inRange(input, cv::Scalar(l0, l1, l2), cv::Scalar(u0, u1, u2), mask);
 
-	// Modify the current object in-place
 	self->mat->release();
 	*self->mat = mask;
 	self->color_space = COLOR_SPACE_GRAY;
@@ -1766,11 +2214,18 @@ static PyObject* chivel_capture(PyObject* self, PyObject* args, PyObject* kwargs
 
 	cv::Mat img;
 	if (rect_obj && rect_obj != Py_None) {
-		// Expect a tuple (x, y, w, h)
-		int x, y, w, h;
-		if (!PyTuple_Check(rect_obj) || PyTuple_Size(rect_obj) != 4 ||
-			!PyArg_ParseTuple(rect_obj, "iiii", &x, &y, &w, &h)) {
-			PyErr_SetString(PyExc_TypeError, "rect must be a tuple (x, y, w, h)");
+		// Expect a chivel.Rect object
+		if (!PyObject_TypeCheck(rect_obj, &CHIVELRectType)) {
+			PyErr_SetString(PyExc_TypeError, "rect must be a chivel.Rect object");
+			return nullptr;
+		}
+		CHIVELRectObject* rect = (CHIVELRectObject*)rect_obj;
+		int x = rect->x;
+		int y = rect->y;
+		int w = rect->width;
+		int h = rect->height;
+		if (w <= 0 || h <= 0) {
+			PyErr_SetString(PyExc_ValueError, "Width and height must be positive");
 			return nullptr;
 		}
 		img = chivel::captureRect(x, y, w, h, displayIndex);
@@ -1882,9 +2337,15 @@ static PyObject* chivel_find(PyObject* self, PyObject* args, PyObject* kwargs) {
 
 		PyObject* matches = PyList_New(0);
 		for (const auto& r : rects) {
-			PyObject* tuple = Py_BuildValue("(iiii)", r.x, r.y, r.width, r.height);
-			PyList_Append(matches, tuple);
-			Py_DECREF(tuple);
+			// Create a chivel.Rect object
+			PyObject* rect_obj = create_rect(r.x, r.y, r.width, r.height);
+
+			// Create a chivel.Match object
+			PyObject* match_obj = create_match(rect_obj);
+
+			PyList_Append(matches, match_obj);
+			Py_DECREF(rect_obj);
+			Py_DECREF(match_obj);
 		}
 		return matches;
 	}
@@ -1897,8 +2358,8 @@ static PyObject* chivel_find(PyObject* self, PyObject* args, PyObject* kwargs) {
 			return nullptr;
 		}
 		const char* search = PyBytes_AsString(py_search_str);
+		Py_DECREF(py_search_str);
 		if (!search) {
-			Py_DECREF(py_search_str);
 			PyErr_SetString(PyExc_TypeError, "Failed to get search string bytes");
 			return nullptr;
 		}
@@ -1913,7 +2374,6 @@ static PyObject* chivel_find(PyObject* self, PyObject* args, PyObject* kwargs) {
 		tesseract::TessBaseAPI tess;
 		std::filesystem::path tessdata_path = get_module_dir() / "tessdata";
 		if (tess.Init(tessdata_path.string().c_str(), "eng", tesseract::OEM_LSTM_ONLY) != 0) {
-			Py_DECREF(py_search_str);
 			PyErr_SetString(PyExc_RuntimeError, "Could not initialize tesseract.");
 			return nullptr;
 		}
@@ -1950,16 +2410,27 @@ static PyObject* chivel_find(PyObject* self, PyObject* args, PyObject* kwargs) {
 					y2 = static_cast<int>(y2 * scaleY);
 					std::smatch word_match;
 					if (std::regex_match(word_str, word_match, search_regex)) {
-						// word found
-						PyObject* rect_tuple = Py_BuildValue("(iiiis)", x1, y1, x2 - x1, y2 - y1, word_str.c_str());
-						PyList_Append(matches, rect_tuple);
-						Py_DECREF(rect_tuple);
+						// Create a chivel.Rect object
+						PyObject* rect_obj = create_rect(x1, y1, x2 - x1, y2 - y1);
+						if (!rect_obj) {
+							return nullptr; // Error creating rect object
+						}
+
+						// Create a chivel.Match object
+						PyObject* match_obj = create_match(rect_obj, PyUnicode_FromString(word_str.c_str()));
+						if (!match_obj) {
+							Py_DECREF(rect_obj);
+							return nullptr; // Error creating match object
+						}
+
+						PyList_Append(matches, match_obj);
+						Py_DECREF(rect_obj);
+						Py_DECREF(match_obj);
 					}
 				}
 			} while (ri->Next(pil));
 		}
 
-		Py_DECREF(py_search_str);
 		return matches;
 	}
 
@@ -1994,30 +2465,37 @@ static PyObject* chivel_mouse_move(PyObject* self, PyObject* args, PyObject* kwd
 	int mon_y = dm.dmPosition.y;
 
 	int x = 0, y = 0;
-	if (PyTuple_Check(pos_obj)) {
-		Py_ssize_t size = PyTuple_Size(pos_obj);
-		if (size == 2) {
-			if (!PyArg_ParseTuple(pos_obj, "ii", &x, &y)) {
-				PyErr_SetString(PyExc_TypeError, "Position must be a tuple of 2 integers (x, y)");
-				return nullptr;
-			}
-		}
-		else if (size == 4) {
-			int w = 0, h = 0;
-			if (!PyArg_ParseTuple(pos_obj, "iiii", &x, &y, &w, &h)) {
-				PyErr_SetString(PyExc_TypeError, "Rectangle must be a tuple of 4 integers (x, y, w, h)");
-				return nullptr;
-			}
-			x += w / 2;
-			y += h / 2;
+	bool found = false;
+
+	// Accept chivel.Point, chivel.Rect, chivel.Match, or tuple
+	if (PyObject_TypeCheck(pos_obj, &CHIVELPointType)) {
+		CHIVELPointObject* pt = (CHIVELPointObject*)pos_obj;
+		x = pt->x;
+		y = pt->y;
+		found = true;
+	}
+	else if (PyObject_TypeCheck(pos_obj, &CHIVELRectType)) {
+		CHIVELRectObject* rect = (CHIVELRectObject*)pos_obj;
+		x = rect->x + rect->width / 2;
+		y = rect->y + rect->height / 2;
+		found = true;
+	}
+	else if (PyObject_TypeCheck(pos_obj, &CHIVELMatchType)) {
+		CHIVELMatchObject* match = (CHIVELMatchObject*)pos_obj;
+		if (match->rect && PyObject_TypeCheck(match->rect, &CHIVELRectType)) {
+			CHIVELRectObject* rect = (CHIVELRectObject*)match->rect;
+			x = rect->x + rect->width / 2;
+			y = rect->y + rect->height / 2;
+			found = true;
 		}
 		else {
-			PyErr_SetString(PyExc_TypeError, "Tuple must be (x, y) or (x, y, w, h)");
+			PyErr_SetString(PyExc_TypeError, "Match.rect must be a chivel.Rect object");
 			return nullptr;
 		}
 	}
-	else {
-		PyErr_SetString(PyExc_TypeError, "Position argument must be a tuple");
+
+	if (!found) {
+		PyErr_SetString(PyExc_TypeError, "Position argument must be a chivel.Point, chivel.Rect, chivel.Match");
 		return nullptr;
 	}
 
@@ -2428,14 +2906,13 @@ static PyObject* chivel_get_location(PyObject* self, PyObject* args) {
 
 	EnumDisplayMonitors(nullptr, nullptr, chivel::monitor_enum_proc, reinterpret_cast<LPARAM>(&search));
 
-	if (search.found == -1) {
-		// Not found, return -1 and absolute position
-		return Py_BuildValue("(iii)", pt.x, pt.y, -1);
-	}
-	else {
-		// Return monitor index and position relative to that monitor
-		return Py_BuildValue("(iii)", search.x, search.y, search.found);
-	}
+	PyObject* point_obj = create_point(pt.x, pt.y);
+	if (!point_obj)
+		return nullptr;
+
+	int display_index = search.found;
+
+	return Py_BuildValue("(Oi)", point_obj, display_index);
 }
 
 static PyObject* chivel_mouse_get_display(PyObject* self, PyObject* args) {
@@ -2484,7 +2961,16 @@ static PyObject* chivel_display_get_rect(PyObject* self, PyObject* args) {
 	int width = dm.dmPelsWidth;
 	int height = dm.dmPelsHeight;
 
-	return Py_BuildValue("(iiii)", x, y, width, height);
+	// Return a chivel.Rect object instead of a tuple
+	PyObject* rect_obj = CHIVELRect_new(&CHIVELRectType, nullptr, nullptr);
+	if (!rect_obj)
+		return nullptr;
+	CHIVELRectObject* rect = (CHIVELRectObject*)rect_obj;
+	rect->x = x;
+	rect->y = y;
+	rect->width = width;
+	rect->height = height;
+	return rect_obj;
 }
 
 // Module initialization
@@ -2495,6 +2981,38 @@ static int chivel_module_exec(PyObject* module)
 
 	// make process DPI aware for mouse scaling
 	SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
+
+	if (PyType_Ready(&CHIVELRectType) < 0)
+		return -1;
+	Py_INCREF(&CHIVELRectType);
+	if (PyModule_AddObject(module, "Rect", (PyObject*)&CHIVELRectType) < 0) {
+		Py_DECREF(&CHIVELRectType);
+		return -1;
+	}
+
+	if (PyType_Ready(&CHIVELPointType) < 0)
+		return -1;
+	Py_INCREF(&CHIVELPointType);
+	if (PyModule_AddObject(module, "Point", (PyObject*)&CHIVELPointType) < 0) {
+		Py_DECREF(&CHIVELPointType);
+		return -1;
+	}
+
+	if (PyType_Ready(&CHIVELColorType) < 0)
+		return -1;
+	Py_INCREF(&CHIVELColorType);
+	if (PyModule_AddObject(module, "Color", (PyObject*)&CHIVELColorType) < 0) {
+		Py_DECREF(&CHIVELColorType);
+		return -1;
+	}
+
+	if (PyType_Ready(&CHIVELMatchType) < 0)
+		return -1;
+	Py_INCREF(&CHIVELMatchType);
+	if (PyModule_AddObject(module, "Match", (PyObject*)&CHIVELMatchType) < 0) {
+		Py_DECREF(&CHIVELMatchType);
+		return -1;
+	}
 
 	if (PyType_Ready(&CHIVELImageType) < 0)
 		return -1;
