@@ -2158,7 +2158,9 @@ static PyObject* chivel_load(PyObject* self, PyObject* args) {
 	image->color_space = static_cast<ColorSpace>(color_space);
 
 	return image_obj;
-}    cv::Mat readImage(char const* const path, int color_space = COLOR_SPACE_BGR)
+}
+
+cv::Mat readImage(char const* const path, int color_space = COLOR_SPACE_BGR)
 {
 	int imread_flag = cv::IMREAD_COLOR;
 	switch (color_space) {
