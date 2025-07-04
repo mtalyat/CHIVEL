@@ -127,7 +127,8 @@
       <AdditionalDependencies>%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>xcopy /y "$(TargetDir)$(TargetFileName)" "$(TargetDir)$(TargetName).pyd"</Command>
+      <Command>
+      </Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -156,6 +157,7 @@
       <Command>xcopy /e /k /y /i "$(ProjectDir)module\" "$(TargetDir)"
 xcopy /y "$(ProjectDir)..\..\Libraries\opencv\bin\*" "$(TargetDir)chivel"
 xcopy /y /s "$(ProjectDir)..\..\Libraries\tesseractocr\bin\*" "$(TargetDir)chivel"
+xcopy /y /s "$(ProjectDir)..\..\Libraries\tesseractocr\data\*" "$(TargetDir)chivel\tessdata"
 copy /y "$(TargetPath)" "$(TargetDir)chivel\$(TargetName).pyd"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
