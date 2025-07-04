@@ -1,5 +1,9 @@
 # Change log
 
+## 0.5.1
+- Fix dependencies.
+- Split find into find_image and find_text.
+
 ## 0.5.0
 - Create Point, Rect, Color, and Match types.
     - Replace existing function arguments with the appropriate types.

@@ -2267,177 +2267,184 @@ static std::filesystem::path get_module_dir()
 	return std::filesystem::current_path();
 }
 
-static PyObject* chivel_find(PyObject* self, PyObject* args, PyObject* kwargs) {
-	PyObject* source_obj;
-	PyObject* search_obj;
-	double threshold = 0.8; // Default threshold for match quality
-	int level = tesseract::RIL_PARA; // Default to PARA
+static PyObject* chivel_find_image(PyObject* self, PyObject* args, PyObject* kwargs) {
+   PyObject* source_obj;
+   PyObject* search_obj;
+   double threshold = 0.8; // Default threshold for match quality
 
-	static const char* kwlist[] = { "source", "search", "threshold", "text_level", nullptr };
-	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "OO|di", (char**)kwlist, &source_obj, &search_obj, &threshold, &level))
-		return nullptr;
+   static const char* kwlist[] = { "source", "search", "threshold" };
+   if (!PyArg_ParseTupleAndKeywords(args, kwargs, "OO|d", (char**)kwlist, &source_obj, &search_obj, &threshold))
+       return nullptr;
 
-	if (!PyObject_TypeCheck(source_obj, &CHIVELImageType)) {
-		PyErr_SetString(PyExc_TypeError, "First argument must be a chivel.Image object");
-		return nullptr;
-	}
+   if (!PyObject_TypeCheck(source_obj, &CHIVELImageType)) {
+       PyErr_SetString(PyExc_TypeError, "First argument must be a chivel.Image object");
+       return nullptr;
+   }
 
-	CHIVELImageObject* source = (CHIVELImageObject*)source_obj;
-	if (!source->mat || source->mat->empty()) {
-		PyErr_SetString(PyExc_ValueError, "Source image is empty");
-		return nullptr;
-	}
+   if (!PyObject_TypeCheck(search_obj, &CHIVELImageType)) {
+       PyErr_SetString(PyExc_TypeError, "Second argument must be a chivel.Image object");
+       return nullptr;
+   }
 
-	// If second arg is chivel.Image, do template matching
-	if (PyObject_TypeCheck(search_obj, &CHIVELImageType)) {
-		CHIVELImageObject* templ = (CHIVELImageObject*)search_obj;
-		if (!templ->mat || templ->mat->empty()) {
-			PyErr_SetString(PyExc_ValueError, "Template image is empty");
-			return nullptr;
-		}
+   CHIVELImageObject* source = (CHIVELImageObject*)source_obj;
+   if (!source->mat || source->mat->empty()) {
+       PyErr_SetString(PyExc_ValueError, "Source image is empty");
+       return nullptr;
+   }
 
-		cv::Mat result;
-		int result_cols = source->mat->cols - templ->mat->cols + 1;
-		int result_rows = source->mat->rows - templ->mat->rows + 1;
-		if (result_cols <= 0 || result_rows <= 0) {
-			PyErr_SetString(PyExc_ValueError, "Template image is larger than source image");
-			return nullptr;
-		}
-		result.create(result_rows, result_cols, CV_32FC1);
+   CHIVELImageObject* templ = (CHIVELImageObject*)search_obj;
+   if (!templ->mat || templ->mat->empty()) {
+       PyErr_SetString(PyExc_ValueError, "Template image is empty");
+       return nullptr;
+   }
 
-		cv::matchTemplate(*(source->mat), *(templ->mat), result, cv::TM_CCOEFF_NORMED);
+   cv::Mat result;
+   int result_cols = source->mat->cols - templ->mat->cols + 1;
+   int result_rows = source->mat->rows - templ->mat->rows + 1;
+   if (result_cols <= 0 || result_rows <= 0) {
+       PyErr_SetString(PyExc_ValueError, "Template image is larger than source image");
+       return nullptr;
+   }
+   result.create(result_rows, result_cols, CV_32FC1);
 
-		std::vector<cv::Rect> rects;
-		std::vector<int> weights;
+   cv::matchTemplate(*(source->mat), *(templ->mat), result, cv::TM_CCOEFF_NORMED);
 
-		double minVal, maxVal;
-		cv::Point minLoc, maxLoc;
-		cv::Mat mask = cv::Mat::ones(result.size(), CV_8U);
+   std::vector<cv::Rect> rects;
+   std::vector<int> weights;
 
-		while (true) {
-			cv::minMaxLoc(result, &minVal, &maxVal, &minLoc, &maxLoc, mask);
-			if (maxVal < threshold)
-				break;
+   double minVal, maxVal;
+   cv::Point minLoc, maxLoc;
+   cv::Mat mask = cv::Mat::ones(result.size(), CV_8U);
 
-			int x = maxLoc.x;
-			int y = maxLoc.y;
-			int w = templ->mat->cols;
-			int h = templ->mat->rows;
+   while (true) {
+       cv::minMaxLoc(result, &minVal, &maxVal, &minLoc, &maxLoc, mask);
+       if (maxVal < threshold)
+           break;
 
-			rects.push_back(cv::Rect(x, y, w, h));
+       int x = maxLoc.x;
+       int y = maxLoc.y;
+       int w = templ->mat->cols;
+       int h = templ->mat->rows;
 
-			// Suppress this region in the mask to avoid duplicate matches
-			cv::Rect region(x, y, w, h);
-			region &= cv::Rect(0, 0, mask.cols, mask.rows);
-			mask(region) = 0;
-		}
+       rects.push_back(cv::Rect(x, y, w, h));
 
-		// Group similar rectangles
-		if (!rects.empty()) {
-			cv::groupRectangles(rects, weights, 1, 0.5);
-		}
+       // Suppress this region in the mask to avoid duplicate matches
+       cv::Rect region(x, y, w, h);
+       region &= cv::Rect(0, 0, mask.cols, mask.rows);
+       mask(region) = 0;
+   }
 
-		PyObject* matches = PyList_New(0);
-		for (const auto& r : rects) {
-			// Create a chivel.Rect object
-			PyObject* rect_obj = create_rect(r.x, r.y, r.width, r.height);
+   // Group similar rectangles
+   if (!rects.empty()) {
+       cv::groupRectangles(rects, weights, 1, 0.5);
+   }
 
-			// Create a chivel.Match object
-			PyObject* match_obj = create_match(rect_obj);
+   PyObject* matches = PyList_New(0);
+   for (const auto& r : rects) {
+       // Create a chivel.Rect object
+       PyObject* rect_obj = create_rect(r.x, r.y, r.width, r.height);
 
-			PyList_Append(matches, match_obj);
-			Py_DECREF(rect_obj);
-			Py_DECREF(match_obj);
-		}
-		return matches;
-	}
+       // Create a chivel.Match object
+       PyObject* match_obj = create_match(rect_obj);
 
-	// If second arg is a string, do OCR and search for the text
-	if (PyUnicode_Check(search_obj)) {
-		PyObject* py_search_str = PyUnicode_AsUTF8String(search_obj);
-		if (!py_search_str) {
-			PyErr_SetString(PyExc_TypeError, "Failed to convert search string to UTF-8");
-			return nullptr;
-		}
-		const char* search = PyBytes_AsString(py_search_str);
-		Py_DECREF(py_search_str);
-		if (!search) {
-			PyErr_SetString(PyExc_TypeError, "Failed to get search string bytes");
-			return nullptr;
-		}
-		std::string search_str(chivel::trim(search));
-		std::regex search_regex(search_str);
+       PyList_Append(matches, match_obj);
+       Py_DECREF(rect_obj);
+       Py_DECREF(match_obj);
+   }
+   return matches;
+}
 
-		cv::Mat original = *(source->mat);
-		int width = original.cols;
-		int height = original.rows;
-		cv::Mat src = chivel::adjustImage(original);
+static PyObject* chivel_find_text(PyObject* self, PyObject* args, PyObject* kwargs) {  
+   PyObject* source_obj;
+   const char* search_str;
+   double threshold = 0.0; // Default threshold for match quality
+   int level = tesseract::RIL_PARA; // Default to PARA
 
-		tesseract::TessBaseAPI tess;
-		std::filesystem::path tessdata_path = get_module_dir() / "tessdata";
-		if (tess.Init(tessdata_path.string().c_str(), "eng", tesseract::OEM_LSTM_ONLY) != 0) {
-			PyErr_SetString(PyExc_RuntimeError, "Could not initialize tesseract.");
-			return nullptr;
-		}
-		tess.SetPageSegMode(tesseract::PSM_SPARSE_TEXT);
-		tess.SetVariable("user_defined_dpi", "300");
-		tess.SetImage(src.data, src.cols, src.rows, 1, static_cast<int>(src.step));
-		tess.Recognize(nullptr);
-		tesseract::ResultIterator* ri = tess.GetIterator();
-		tesseract::PageIteratorLevel pil = static_cast<tesseract::PageIteratorLevel>(level);
+   static const char* kwlist[] = { "source", "search", "threshold", "text_level", nullptr };  
+   if (!PyArg_ParseTupleAndKeywords(args, kwargs, "Os|di", (char**)kwlist, &source_obj, &search_str, &threshold, &level))  
+       return nullptr;  
 
-		double scaleX = static_cast<double>(width) / src.cols;
-		double scaleY = static_cast<double>(height) / src.rows;
+   if (!PyObject_TypeCheck(source_obj, &CHIVELImageType)) {  
+       PyErr_SetString(PyExc_TypeError, "First argument must be a chivel.Image object");  
+       return nullptr;  
+   }  
 
-		PyObject* matches = PyList_New(0);
-		if (ri != nullptr) {
-			do {
-				const char* word = ri->GetUTF8Text(pil);
-				std::string word_str(word ? word : "");
-				word_str = chivel::trim(word_str);
-				if (word) {
-					delete[] word; // Clean up the allocated memory
-				}
+   CHIVELImageObject* source = (CHIVELImageObject*)source_obj;  
+   if (!source->mat || source->mat->empty()) {  
+       PyErr_SetString(PyExc_ValueError, "Source image is empty");  
+       return nullptr;  
+   }  
 
-				float conf = ri->Confidence(pil);
-				if (word_str.empty() || conf < threshold * 100.0f) {
-					continue;
-				}
-				// Scale bounding box coordinates
-				int x1, y1, x2, y2;
-				if (ri->BoundingBox(pil, &x1, &y1, &x2, &y2)) {
-					x1 = static_cast<int>(x1 * scaleX);
-					y1 = static_cast<int>(y1 * scaleY);
-					x2 = static_cast<int>(x2 * scaleX);
-					y2 = static_cast<int>(y2 * scaleY);
-					std::smatch word_match;
-					if (std::regex_match(word_str, word_match, search_regex)) {
-						// Create a chivel.Rect object
-						PyObject* rect_obj = create_rect(x1, y1, x2 - x1, y2 - y1);
-						if (!rect_obj) {
-							return nullptr; // Error creating rect object
-						}
+   // Perform OCR and search for the text  
+   std::string search_trimmed = chivel::trim(search_str);  
+   std::regex search_regex(search_trimmed);  
 
-						// Create a chivel.Match object
-						PyObject* match_obj = create_match(rect_obj, PyUnicode_FromString(word_str.c_str()));
-						if (!match_obj) {
-							Py_DECREF(rect_obj);
-							return nullptr; // Error creating match object
-						}
+   cv::Mat original = *(source->mat);  
+   int width = original.cols;  
+   int height = original.rows;  
+   cv::Mat src = chivel::adjustImage(original);  
 
-						PyList_Append(matches, match_obj);
-						Py_DECREF(rect_obj);
-						Py_DECREF(match_obj);
-					}
-				}
-			} while (ri->Next(pil));
-		}
+   tesseract::TessBaseAPI tess;  
+   std::filesystem::path tessdata_path = get_module_dir() / "tessdata";  
+   if (tess.Init(tessdata_path.string().c_str(), "eng", tesseract::OEM_LSTM_ONLY) != 0) {  
+       PyErr_SetString(PyExc_RuntimeError, "Could not initialize tesseract.");  
+       return nullptr;  
+   }  
+   tess.SetPageSegMode(tesseract::PSM_SPARSE_TEXT);  
+   tess.SetVariable("user_defined_dpi", "300");  
+   tess.SetImage(src.data, src.cols, src.rows, 1, static_cast<int>(src.step));  
+   tess.Recognize(nullptr);  
+   tesseract::ResultIterator* ri = tess.GetIterator();  
+   tesseract::PageIteratorLevel pil = static_cast<tesseract::PageIteratorLevel>(level);  
 
-		return matches;
-	}
+   double scaleX = static_cast<double>(width) / src.cols;  
+   double scaleY = static_cast<double>(height) / src.rows;  
 
-	PyErr_SetString(PyExc_TypeError, "Second argument must be a chivel.Image or a string");
-	return nullptr;
+   PyObject* matches = PyList_New(0);  
+   if (ri != nullptr) {  
+       do {  
+           const char* word = ri->GetUTF8Text(pil);  
+           std::string word_str(word ? word : "");  
+           word_str = chivel::trim(word_str);  
+           if (word) {  
+               delete[] word; // Clean up the allocated memory  
+           }  
+
+           float conf = ri->Confidence(pil);  
+           if (word_str.empty() || conf < threshold * 100.0f) {  
+               continue;  
+           }  
+           // Scale bounding box coordinates  
+           int x1, y1, x2, y2;  
+           if (ri->BoundingBox(pil, &x1, &y1, &x2, &y2)) {  
+               x1 = static_cast<int>(x1 * scaleX);  
+               y1 = static_cast<int>(y1 * scaleY);  
+               x2 = static_cast<int>(x2 * scaleX);  
+               y2 = static_cast<int>(y2 * scaleY);  
+               std::smatch word_match;  
+               if (std::regex_match(word_str, word_match, search_regex)) {  
+                   // Create a chivel.Rect object  
+                   PyObject* rect_obj = create_rect(x1, y1, x2 - x1, y2 - y1);  
+                   if (!rect_obj) {  
+                       return nullptr; // Error creating rect object  
+                   }  
+
+                   // Create a chivel.Match object  
+                   PyObject* match_obj = create_match(rect_obj, PyUnicode_FromString(word_str.c_str()));  
+                   if (!match_obj) {  
+                       Py_DECREF(rect_obj);  
+                       return nullptr; // Error creating match object  
+                   }  
+
+                   PyList_Append(matches, match_obj);  
+                   Py_DECREF(rect_obj);  
+                   Py_DECREF(match_obj);  
+               }  
+           }  
+       } while (ri->Next(pil));  
+   }  
+
+   return matches;  
 }
 
 static PyObject* chivel_mouse_move(PyObject* self, PyObject* args, PyObject* kwds) {
@@ -3168,7 +3175,8 @@ static PyMethodDef chivelMethods[] = {
 	{"load", chivel_load, METH_VARARGS, "Load an image from a file"},
 	{"save", chivel_save, METH_VARARGS, "Save an image to a file"},
 	{"capture", (PyCFunction)chivel_capture, METH_VARARGS | METH_KEYWORDS, "Capture the screen or a specific rectangle"},
-	{"find", (PyCFunction)chivel_find, METH_VARARGS | METH_KEYWORDS, "Find rectangles or text in an image"},
+	{"find_image", (PyCFunction)chivel_find_image, METH_VARARGS | METH_KEYWORDS, "Find images within an image"},
+	{"find_text", (PyCFunction)chivel_find_text, METH_VARARGS | METH_KEYWORDS, "Find text within an image"},
 	{"wait", chivel_wait, METH_VARARGS, "Wait for a specified number of seconds"},
 	{"mouse_move", (PyCFunction)chivel_mouse_move, METH_VARARGS | METH_KEYWORDS, "Move the mouse cursor to a specific position or rectangle on a display"},
 	{"mouse_click", (PyCFunction)chivel_mouse_click, METH_VARARGS | METH_KEYWORDS, "Click the mouse button"},
