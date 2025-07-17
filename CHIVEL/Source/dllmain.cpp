@@ -3042,7 +3042,7 @@ static int chivel_module_exec(PyObject* module)
 	PyModule_AddIntConstant(module, "DISPLAY_COUNT", chivel::get_display_count());
 
 	// Keys
-	PyModule_AddIntConstant(module, "KEY_BACKSPACE", VK_BACK);
+    PyModule_AddIntConstant(module, "KEY_META", VK_LWIN);
 	PyModule_AddIntConstant(module, "KEY_TAB", VK_TAB);
 	PyModule_AddIntConstant(module, "KEY_ENTER", VK_RETURN);
 	PyModule_AddIntConstant(module, "KEY_SHIFT", VK_SHIFT);

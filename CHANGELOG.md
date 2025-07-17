@@ -1,8 +1,9 @@
 # Change log
 
-## 0.5.1
+## 0.6.0
 - Fix dependencies.
 - Split find into find_image and find_text.
+- Add KEY_META, which refers to the Windows key.
 
 ## 0.5.0
 - Create Point, Rect, Color, and Match types.

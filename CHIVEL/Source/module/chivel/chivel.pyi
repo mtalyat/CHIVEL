@@ -91,6 +91,7 @@ TEXT_SYMBOL: int
 
 DISPLAY_COUNT: int
 
+KEY_META: int
 KEY_BACKSPACE: int
 KEY_TAB: int
 KEY_ENTER: int
