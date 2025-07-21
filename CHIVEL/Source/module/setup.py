@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name="chivel",
-    version="0.5.0",
+    version="0.6.0",
     description="For easily interfacing with the screen, just as a human would.",
     long_description=open("README.md", encoding="utf-8").read(),
     long_description_content_type="text/markdown",

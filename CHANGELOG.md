@@ -4,6 +4,9 @@
 - Fix dependencies.
 - Split find into find_image and find_text.
 - Add KEY_META, which refers to the Windows key.
+- Add find_any, find_all, expect_any, expect_all.
+- Update load function to be able to load text, images, or a list of files.
+- Update type to allow for a list of strings, KEY_ values, or float values (for additional wait times).
 
 ## 0.5.0
 - Create Point, Rect, Color, and Match types.

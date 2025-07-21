@@ -10,6 +10,7 @@
 #include <structmember.h>
 #pragma comment(lib, "Shcore.lib")
 #include <filesystem>
+#include <fstream>
 #include <regex>
 
 #pragma region chivel
@@ -56,6 +57,13 @@ enum ColorSpace
 
 namespace chivel
 {
+	constexpr int DEFAULT_DISPLAY_INDEX = 0;
+	constexpr double DEFAULT_WAIT_SECONDS = 0.1;
+	constexpr double DEFAULT_TIMEOUT_SECONDS = -1.0;
+	constexpr double DEFAULT_INTERVAL_SECONDS = 1.0;
+	constexpr double DEFAULT_THRESHOLD = 0.8;
+	constexpr int DEFAULT_TEXT_LEVEL = tesseract::RIL_PARA;
+
 	std::string trim(std::string str)
 	{
 		// Trim leading whitespace and trailing whitespace
@@ -328,6 +336,12 @@ namespace chivel
 		return converted;
 	}
 
+	void wait(double seconds)
+	{
+		DWORD ms = static_cast<DWORD>(seconds * 1000.0);
+		Sleep(ms);
+	}
+
 	int get_display_count() {
 		int count = 0;
 		EnumDisplayMonitors(
@@ -360,7 +374,7 @@ namespace chivel
 		return TRUE; // Continue enumeration
 	}
 
-	UINT get_display_dpi(int display_index = 0) {
+	UINT get_display_dpi(int display_index = chivel::DEFAULT_DISPLAY_INDEX) {
 		DISPLAY_DEVICE dd;
 		dd.cb = sizeof(dd);
 		if (!EnumDisplayDevices(NULL, display_index, &dd, 0))
@@ -461,6 +475,13 @@ namespace chivel
 		// Optionally: Py_Finalize(); // Only if you are done with Python in the process
 
 		return true;
+	}
+
+	bool is_text_file(const std::string& path)
+	{
+		std::string ext = std::filesystem::path(path).extension().string();
+		std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+		return ext == ".txt" || ext == ".csv" || ext == ".log" || ext == ".json" || ext == ".xml";
 	}
 }
 
@@ -802,24 +823,24 @@ static PyTypeObject CHIVELMatchType = {
 };
 
 static PyObject* create_match(PyObject* rect_obj, PyObject* label_obj = Py_None) {
-    if (!PyObject_TypeCheck(rect_obj, &CHIVELRectType)) {
-        PyErr_SetString(PyExc_TypeError, "rect must be a chivel.Rect object");
-        return nullptr;
-    }
-    if (label_obj == nullptr) {
-        label_obj = Py_None;
-    }
-    PyObject* match_obj = CHIVELMatch_new(&CHIVELMatchType, nullptr, nullptr);
-    if (!match_obj)
-        return nullptr;
-    CHIVELMatchObject* match = (CHIVELMatchObject*)match_obj;
-    Py_XDECREF(match->rect);
-    Py_INCREF(rect_obj);
-    match->rect = rect_obj;
-    Py_XDECREF(match->label);
-    Py_INCREF(label_obj);
-    match->label = label_obj;
-    return match_obj;
+	if (!PyObject_TypeCheck(rect_obj, &CHIVELRectType)) {
+		PyErr_SetString(PyExc_TypeError, "rect must be a chivel.Rect object");
+		return nullptr;
+	}
+	if (label_obj == nullptr) {
+		label_obj = Py_None;
+	}
+	PyObject* match_obj = CHIVELMatch_new(&CHIVELMatchType, nullptr, nullptr);
+	if (!match_obj)
+		return nullptr;
+	CHIVELMatchObject* match = (CHIVELMatchObject*)match_obj;
+	Py_XDECREF(match->rect);
+	Py_INCREF(rect_obj);
+	match->rect = rect_obj;
+	Py_XDECREF(match->label);
+	Py_INCREF(label_obj);
+	match->label = label_obj;
+	return match_obj;
 }
 
 #pragma endregion
@@ -2118,46 +2139,99 @@ static PyObject* CHIVELImage_mask(CHIVELImageObject* self, PyObject* args) {
 #pragma endregion
 
 static PyObject* chivel_load(PyObject* self, PyObject* args) {
-	const char* path;
+	PyObject* input_obj = nullptr;
 	int color_space = COLOR_SPACE_BGR; // Default to BGR
-	if (!PyArg_ParseTuple(args, "s|i", &path, &color_space))
+	if (!PyArg_ParseTuple(args, "O|i", &input_obj, &color_space))
 		return nullptr;
 
-	// Load image using OpenCV
-	cv::Mat img = chivel::readImage(path, static_cast<ColorSpace>(color_space));
-	if (img.empty()) {
-		PyErr_SetString(PyExc_IOError, "Failed to load image from path");
+	// Helper to load a single file (image or text)
+	auto load_single = [&](const std::string& path) -> PyObject* {
+		if (chivel::is_text_file(path)) {
+			std::ifstream file(path);
+			if (!file.is_open()) {
+				PyErr_SetString(PyExc_IOError, ("Failed to load text file: " + path).c_str());
+				return nullptr;
+			}
+			std::stringstream buffer;
+			buffer << file.rdbuf();
+			return PyUnicode_FromString(buffer.str().c_str());
+		}
+		else {
+			cv::Mat img = chivel::readImage(path.c_str(), static_cast<ColorSpace>(color_space));
+			if (img.empty()) {
+				PyErr_SetString(PyExc_IOError, ("Failed to load image from path: " + path).c_str());
+				return nullptr;
+			}
+			// Convert to the correct color space
+			ColorSpace current;
+			switch (color_space)
+			{
+			case COLOR_SPACE_BGRA:
+			case COLOR_SPACE_RGBA:
+				current = COLOR_SPACE_BGRA;
+				break;
+			case COLOR_SPACE_GRAY:
+				current = COLOR_SPACE_GRAY;
+				break;
+			default:
+				current = COLOR_SPACE_BGR;
+				break;
+			}
+			img = chivel::convertColorSpace(img, current, static_cast<ColorSpace>(color_space));
+			PyObject* image_obj = CHIVELImage_new(&CHIVELImageType, nullptr, nullptr);
+			if (!image_obj)
+				return nullptr;
+			CHIVELImageObject* image = (CHIVELImageObject*)image_obj;
+			delete image->mat;
+			image->mat = new cv::Mat(img);
+			image->color_space = static_cast<ColorSpace>(color_space);
+			return image_obj;
+		}
+		};
+
+	// If input is a string, treat as single path
+	if (PyUnicode_Check(input_obj)) {
+		const char* path = PyUnicode_AsUTF8(input_obj);
+		if (!path) {
+			PyErr_SetString(PyExc_TypeError, "Failed to convert path to string");
+			return nullptr;
+		}
+		return load_single(path);
+	}
+	// If input is a list/tuple, treat as list of paths
+	else if (PyList_Check(input_obj) || PyTuple_Check(input_obj)) {
+		Py_ssize_t n = PySequence_Size(input_obj);
+		PyObject* out_list = PyList_New(n);
+		if (!out_list)
+			return nullptr;
+		for (Py_ssize_t i = 0; i < n; ++i) {
+			PyObject* item = PySequence_GetItem(input_obj, i);
+			if (!item || !PyUnicode_Check(item)) {
+				Py_XDECREF(item);
+				Py_DECREF(out_list);
+				PyErr_SetString(PyExc_TypeError, "All items must be string paths");
+				return nullptr;
+			}
+			const char* path = PyUnicode_AsUTF8(item);
+			Py_DECREF(item);
+			if (!path) {
+				Py_DECREF(out_list);
+				PyErr_SetString(PyExc_TypeError, "Failed to convert path to string");
+				return nullptr;
+			}
+			PyObject* loaded = load_single(path);
+			if (!loaded) {
+				Py_DECREF(out_list);
+				return nullptr;
+			}
+			PyList_SET_ITEM(out_list, i, loaded); // Steals reference
+		}
+		return out_list;
+	}
+	else {
+		PyErr_SetString(PyExc_TypeError, "Argument must be a string path or a list/tuple of string paths");
 		return nullptr;
 	}
-
-	// Convert to the correct color space
-	ColorSpace current;
-	switch (color_space)
-	{
-	case COLOR_SPACE_BGRA:
-	case COLOR_SPACE_RGBA:
-		current = COLOR_SPACE_BGRA;
-		break;
-	case COLOR_SPACE_GRAY:
-		current = COLOR_SPACE_GRAY;
-		break;
-	default:
-		current = COLOR_SPACE_BGR;
-		break;
-	}
-	img = chivel::convertColorSpace(img, current, static_cast<ColorSpace>(color_space));
-
-	// Create a new chivel.Image object
-	PyObject* image_obj = CHIVELImage_new(&CHIVELImageType, nullptr, nullptr);
-	if (!image_obj)
-		return nullptr;
-
-	CHIVELImageObject* image = (CHIVELImageObject*)image_obj;
-	delete image->mat; // Delete the default empty mat
-	image->mat = new cv::Mat(img); // Assign loaded image
-	image->color_space = static_cast<ColorSpace>(color_space);
-
-	return image_obj;
 }
 
 cv::Mat readImage(char const* const path, int color_space = COLOR_SPACE_BGR)
@@ -2182,29 +2256,48 @@ cv::Mat readImage(char const* const path, int color_space = COLOR_SPACE_BGR)
 }
 
 static PyObject* chivel_save(PyObject* self, PyObject* args) {
-	PyObject* image_obj;
+	PyObject* obj;
 	const char* path;
 
-	if (!PyArg_ParseTuple(args, "Os", &image_obj, &path))
+	if (!PyArg_ParseTuple(args, "Os", &obj, &path))
 		return nullptr;
 
-	if (!PyObject_TypeCheck(image_obj, &CHIVELImageType)) {
-		PyErr_SetString(PyExc_TypeError, "First argument must be a chivel.Image object");
-		return nullptr;
+	if (chivel::is_text_file(path)) {
+		// Save text file
+		const char* text = nullptr;
+		if (PyUnicode_Check(obj)) {
+			text = PyUnicode_AsUTF8(obj);
+		}
+		else {
+			PyErr_SetString(PyExc_TypeError, "For text files, argument must be a str");
+			return nullptr;
+		}
+		std::ofstream file(path, std::ios::out | std::ios::trunc);
+		if (!file.is_open()) {
+			PyErr_SetString(PyExc_IOError, "Failed to open text file for writing");
+			return nullptr;
+		}
+		file << (text ? text : "");
+		file.close();
+		Py_RETURN_NONE;
 	}
-
-	CHIVELImageObject* image = (CHIVELImageObject*)image_obj;
-	if (!image->mat || image->mat->empty()) {
-		PyErr_SetString(PyExc_ValueError, "Image data is empty");
-		return nullptr;
+	else {
+		// Save image file
+		if (!PyObject_TypeCheck(obj, &CHIVELImageType)) {
+			PyErr_SetString(PyExc_TypeError, "For image files, argument must be a chivel.Image object");
+			return nullptr;
+		}
+		CHIVELImageObject* image = (CHIVELImageObject*)obj;
+		if (!image->mat || image->mat->empty()) {
+			PyErr_SetString(PyExc_ValueError, "Image data is empty");
+			return nullptr;
+		}
+		if (!cv::imwrite(path, *(image->mat))) {
+			PyErr_SetString(PyExc_IOError, "Failed to save image to path");
+			return nullptr;
+		}
+		Py_RETURN_NONE;
 	}
-
-	if (!cv::imwrite(path, *(image->mat))) {
-		PyErr_SetString(PyExc_IOError, "Failed to save image to path");
-		return nullptr;
-	}
-
-	Py_RETURN_NONE;
 }
 
 static PyObject* chivel_capture(PyObject* self, PyObject* args, PyObject* kwargs) {
@@ -2268,188 +2361,450 @@ static std::filesystem::path get_module_dir()
 }
 
 static PyObject* chivel_find_image(PyObject* self, PyObject* args, PyObject* kwargs) {
-   PyObject* source_obj;
-   PyObject* search_obj;
-   double threshold = 0.8; // Default threshold for match quality
+	PyObject* source_obj;
+	PyObject* search_obj;
+	double threshold = chivel::DEFAULT_THRESHOLD; // Default threshold for match quality
 
-   static const char* kwlist[] = { "source", "search", "threshold" };
-   if (!PyArg_ParseTupleAndKeywords(args, kwargs, "OO|d", (char**)kwlist, &source_obj, &search_obj, &threshold))
-       return nullptr;
+	static const char* kwlist[] = { "source", "search", "threshold" };
+	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "OO|d", (char**)kwlist, &source_obj, &search_obj, &threshold))
+		return nullptr;
 
-   if (!PyObject_TypeCheck(source_obj, &CHIVELImageType)) {
-       PyErr_SetString(PyExc_TypeError, "First argument must be a chivel.Image object");
-       return nullptr;
-   }
+	if (!PyObject_TypeCheck(source_obj, &CHIVELImageType)) {
+		PyErr_SetString(PyExc_TypeError, "First argument must be a chivel.Image object");
+		return nullptr;
+	}
 
-   if (!PyObject_TypeCheck(search_obj, &CHIVELImageType)) {
-       PyErr_SetString(PyExc_TypeError, "Second argument must be a chivel.Image object");
-       return nullptr;
-   }
+	if (!PyObject_TypeCheck(search_obj, &CHIVELImageType)) {
+		PyErr_SetString(PyExc_TypeError, "Second argument must be a chivel.Image object");
+		return nullptr;
+	}
 
-   CHIVELImageObject* source = (CHIVELImageObject*)source_obj;
-   if (!source->mat || source->mat->empty()) {
-       PyErr_SetString(PyExc_ValueError, "Source image is empty");
-       return nullptr;
-   }
+	CHIVELImageObject* source = (CHIVELImageObject*)source_obj;
+	if (!source->mat || source->mat->empty()) {
+		PyErr_SetString(PyExc_ValueError, "Source image is empty");
+		return nullptr;
+	}
 
-   CHIVELImageObject* templ = (CHIVELImageObject*)search_obj;
-   if (!templ->mat || templ->mat->empty()) {
-       PyErr_SetString(PyExc_ValueError, "Template image is empty");
-       return nullptr;
-   }
+	CHIVELImageObject* templ = (CHIVELImageObject*)search_obj;
+	if (!templ->mat || templ->mat->empty()) {
+		PyErr_SetString(PyExc_ValueError, "Template image is empty");
+		return nullptr;
+	}
 
-   cv::Mat result;
-   int result_cols = source->mat->cols - templ->mat->cols + 1;
-   int result_rows = source->mat->rows - templ->mat->rows + 1;
-   if (result_cols <= 0 || result_rows <= 0) {
-       PyErr_SetString(PyExc_ValueError, "Template image is larger than source image");
-       return nullptr;
-   }
-   result.create(result_rows, result_cols, CV_32FC1);
+	cv::Mat result;
+	int result_cols = source->mat->cols - templ->mat->cols + 1;
+	int result_rows = source->mat->rows - templ->mat->rows + 1;
+	if (result_cols <= 0 || result_rows <= 0) {
+		PyErr_SetString(PyExc_ValueError, "Template image is larger than source image");
+		return nullptr;
+	}
+	result.create(result_rows, result_cols, CV_32FC1);
 
-   cv::matchTemplate(*(source->mat), *(templ->mat), result, cv::TM_CCOEFF_NORMED);
+	cv::matchTemplate(*(source->mat), *(templ->mat), result, cv::TM_CCOEFF_NORMED);
 
-   std::vector<cv::Rect> rects;
-   std::vector<int> weights;
+	std::vector<cv::Rect> rects;
+	std::vector<int> weights;
 
-   double minVal, maxVal;
-   cv::Point minLoc, maxLoc;
-   cv::Mat mask = cv::Mat::ones(result.size(), CV_8U);
+	double minVal, maxVal;
+	cv::Point minLoc, maxLoc;
+	cv::Mat mask = cv::Mat::ones(result.size(), CV_8U);
 
-   while (true) {
-       cv::minMaxLoc(result, &minVal, &maxVal, &minLoc, &maxLoc, mask);
-       if (maxVal < threshold)
-           break;
+	while (true) {
+		cv::minMaxLoc(result, &minVal, &maxVal, &minLoc, &maxLoc, mask);
+		if (maxVal < threshold)
+			break;
 
-       int x = maxLoc.x;
-       int y = maxLoc.y;
-       int w = templ->mat->cols;
-       int h = templ->mat->rows;
+		int x = maxLoc.x;
+		int y = maxLoc.y;
+		int w = templ->mat->cols;
+		int h = templ->mat->rows;
 
-       rects.push_back(cv::Rect(x, y, w, h));
+		rects.push_back(cv::Rect(x, y, w, h));
 
-       // Suppress this region in the mask to avoid duplicate matches
-       cv::Rect region(x, y, w, h);
-       region &= cv::Rect(0, 0, mask.cols, mask.rows);
-       mask(region) = 0;
-   }
+		// Suppress this region in the mask to avoid duplicate matches
+		cv::Rect region(x, y, w, h);
+		region &= cv::Rect(0, 0, mask.cols, mask.rows);
+		mask(region) = 0;
+	}
 
-   // Group similar rectangles
-   if (!rects.empty()) {
-       cv::groupRectangles(rects, weights, 1, 0.5);
-   }
+	// Group similar rectangles
+	if (!rects.empty()) {
+		cv::groupRectangles(rects, weights, 1, 0.5);
+	}
 
-   PyObject* matches = PyList_New(0);
-   for (const auto& r : rects) {
-       // Create a chivel.Rect object
-       PyObject* rect_obj = create_rect(r.x, r.y, r.width, r.height);
+	PyObject* matches = PyList_New(0);
+	for (const auto& r : rects) {
+		// Create a chivel.Rect object
+		PyObject* rect_obj = create_rect(r.x, r.y, r.width, r.height);
 
-       // Create a chivel.Match object
-       PyObject* match_obj = create_match(rect_obj);
+		// Create a chivel.Match object
+		PyObject* match_obj = create_match(rect_obj);
 
-       PyList_Append(matches, match_obj);
-       Py_DECREF(rect_obj);
-       Py_DECREF(match_obj);
-   }
-   return matches;
+		PyList_Append(matches, match_obj);
+		Py_DECREF(rect_obj);
+		Py_DECREF(match_obj);
+	}
+	return matches;
 }
 
-static PyObject* chivel_find_text(PyObject* self, PyObject* args, PyObject* kwargs) {  
-   PyObject* source_obj;
-   const char* search_str;
-   double threshold = 0.0; // Default threshold for match quality
-   int level = tesseract::RIL_PARA; // Default to PARA
+static PyObject* chivel_find_text(PyObject* self, PyObject* args, PyObject* kwargs) {
+	PyObject* source_obj;
+	const char* search_str;
+	double threshold = chivel::DEFAULT_THRESHOLD;
+	int level = chivel::DEFAULT_TEXT_LEVEL;
 
-   static const char* kwlist[] = { "source", "search", "threshold", "text_level", nullptr };  
-   if (!PyArg_ParseTupleAndKeywords(args, kwargs, "Os|di", (char**)kwlist, &source_obj, &search_str, &threshold, &level))  
-       return nullptr;  
+	static const char* kwlist[] = { "source", "search", "threshold", "text_level", nullptr };
+	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "Os|di", (char**)kwlist, &source_obj, &search_str, &threshold, &level))
+		return nullptr;
 
-   if (!PyObject_TypeCheck(source_obj, &CHIVELImageType)) {  
-       PyErr_SetString(PyExc_TypeError, "First argument must be a chivel.Image object");  
-       return nullptr;  
-   }  
+	if (!PyObject_TypeCheck(source_obj, &CHIVELImageType)) {
+		PyErr_SetString(PyExc_TypeError, "First argument must be a chivel.Image object");
+		return nullptr;
+	}
 
-   CHIVELImageObject* source = (CHIVELImageObject*)source_obj;  
-   if (!source->mat || source->mat->empty()) {  
-       PyErr_SetString(PyExc_ValueError, "Source image is empty");  
-       return nullptr;  
-   }  
+	CHIVELImageObject* source = (CHIVELImageObject*)source_obj;
+	if (!source->mat || source->mat->empty()) {
+		PyErr_SetString(PyExc_ValueError, "Source image is empty");
+		return nullptr;
+	}
 
-   // Perform OCR and search for the text  
-   std::string search_trimmed = chivel::trim(search_str);  
-   std::regex search_regex(search_trimmed);  
+	// Perform OCR and search for the text  
+	std::string search_trimmed = chivel::trim(search_str);
+	std::regex search_regex(search_trimmed);
 
-   cv::Mat original = *(source->mat);  
-   int width = original.cols;  
-   int height = original.rows;  
-   cv::Mat src = chivel::adjustImage(original);  
+	cv::Mat original = *(source->mat);
+	int width = original.cols;
+	int height = original.rows;
+	cv::Mat src = chivel::adjustImage(original);
 
-   tesseract::TessBaseAPI tess;  
-   std::filesystem::path tessdata_path = get_module_dir() / "tessdata";  
-   if (tess.Init(tessdata_path.string().c_str(), "eng", tesseract::OEM_LSTM_ONLY) != 0) {  
-       PyErr_SetString(PyExc_RuntimeError, "Could not initialize tesseract.");  
-       return nullptr;  
-   }  
-   tess.SetPageSegMode(tesseract::PSM_SPARSE_TEXT);  
-   tess.SetVariable("user_defined_dpi", "300");  
-   tess.SetImage(src.data, src.cols, src.rows, 1, static_cast<int>(src.step));  
-   tess.Recognize(nullptr);  
-   tesseract::ResultIterator* ri = tess.GetIterator();  
-   tesseract::PageIteratorLevel pil = static_cast<tesseract::PageIteratorLevel>(level);  
+	tesseract::TessBaseAPI tess;
+	std::filesystem::path tessdata_path = get_module_dir() / "tessdata";
+	if (tess.Init(tessdata_path.string().c_str(), "eng", tesseract::OEM_LSTM_ONLY) != 0) {
+		PyErr_SetString(PyExc_RuntimeError, "Could not initialize tesseract.");
+		return nullptr;
+	}
+	tess.SetPageSegMode(tesseract::PSM_SPARSE_TEXT);
+	tess.SetVariable("user_defined_dpi", "300");
+	tess.SetImage(src.data, src.cols, src.rows, 1, static_cast<int>(src.step));
+	tess.Recognize(nullptr);
+	tesseract::ResultIterator* ri = tess.GetIterator();
+	tesseract::PageIteratorLevel pil = static_cast<tesseract::PageIteratorLevel>(level);
 
-   double scaleX = static_cast<double>(width) / src.cols;  
-   double scaleY = static_cast<double>(height) / src.rows;  
+	double scaleX = static_cast<double>(width) / src.cols;
+	double scaleY = static_cast<double>(height) / src.rows;
 
-   PyObject* matches = PyList_New(0);  
-   if (ri != nullptr) {  
-       do {  
-           const char* word = ri->GetUTF8Text(pil);  
-           std::string word_str(word ? word : "");  
-           word_str = chivel::trim(word_str);  
-           if (word) {  
-               delete[] word; // Clean up the allocated memory  
-           }  
+	PyObject* matches = PyList_New(0);
+	if (ri != nullptr) {
+		do {
+			const char* word = ri->GetUTF8Text(pil);
+			std::string word_str(word ? word : "");
+			word_str = chivel::trim(word_str);
+			if (word) {
+				delete[] word; // Clean up the allocated memory  
+			}
 
-           float conf = ri->Confidence(pil);  
-           if (word_str.empty() || conf < threshold * 100.0f) {  
-               continue;  
-           }  
-           // Scale bounding box coordinates  
-           int x1, y1, x2, y2;  
-           if (ri->BoundingBox(pil, &x1, &y1, &x2, &y2)) {  
-               x1 = static_cast<int>(x1 * scaleX);  
-               y1 = static_cast<int>(y1 * scaleY);  
-               x2 = static_cast<int>(x2 * scaleX);  
-               y2 = static_cast<int>(y2 * scaleY);  
-               std::smatch word_match;  
-               if (std::regex_match(word_str, word_match, search_regex)) {  
-                   // Create a chivel.Rect object  
-                   PyObject* rect_obj = create_rect(x1, y1, x2 - x1, y2 - y1);  
-                   if (!rect_obj) {  
-                       return nullptr; // Error creating rect object  
-                   }  
+			float conf = ri->Confidence(pil);
+			if (word_str.empty() || conf < threshold * 100.0f) {
+				continue;
+			}
+			// Scale bounding box coordinates  
+			int x1, y1, x2, y2;
+			if (ri->BoundingBox(pil, &x1, &y1, &x2, &y2)) {
+				x1 = static_cast<int>(x1 * scaleX);
+				y1 = static_cast<int>(y1 * scaleY);
+				x2 = static_cast<int>(x2 * scaleX);
+				y2 = static_cast<int>(y2 * scaleY);
+				std::smatch word_match;
+				if (std::regex_match(word_str, word_match, search_regex)) {
+					// Create a chivel.Rect object  
+					PyObject* rect_obj = create_rect(x1, y1, x2 - x1, y2 - y1);
+					if (!rect_obj) {
+						return nullptr; // Error creating rect object  
+					}
 
-                   // Create a chivel.Match object  
-                   PyObject* match_obj = create_match(rect_obj, PyUnicode_FromString(word_str.c_str()));  
-                   if (!match_obj) {  
-                       Py_DECREF(rect_obj);  
-                       return nullptr; // Error creating match object  
-                   }  
+					// Create a chivel.Match object  
+					PyObject* match_obj = create_match(rect_obj, PyUnicode_FromString(word_str.c_str()));
+					if (!match_obj) {
+						Py_DECREF(rect_obj);
+						return nullptr; // Error creating match object  
+					}
 
-                   PyList_Append(matches, match_obj);  
-                   Py_DECREF(rect_obj);  
-                   Py_DECREF(match_obj);  
-               }  
-           }  
-       } while (ri->Next(pil));  
-   }  
+					PyList_Append(matches, match_obj);
+					Py_DECREF(rect_obj);
+					Py_DECREF(match_obj);
+				}
+			}
+		} while (ri->Next(pil));
+	}
 
-   return matches;  
+	return matches;
+}
+
+static PyObject* chivel_find_any(PyObject* self, PyObject* args, PyObject* kwargs) {
+	PyObject* source_obj = nullptr;
+	PyObject* search_list = nullptr;
+	double threshold = chivel::DEFAULT_THRESHOLD;
+	int text_level = chivel::DEFAULT_TEXT_LEVEL;
+
+	static const char* kwlist[] = { "source", "search_list", "threshold", "text_level", nullptr };
+	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "OO|di", (char**)kwlist, &source_obj, &search_list, &threshold, &text_level))
+		return nullptr;
+
+	if (!PyObject_TypeCheck(source_obj, &CHIVELImageType)) {
+		PyErr_SetString(PyExc_TypeError, "source must be a chivel.Image object");
+		return nullptr;
+	}
+
+	if (!PyList_Check(search_list) && !PyTuple_Check(search_list)) {
+		PyErr_SetString(PyExc_TypeError, "search_list must be a list or tuple");
+		return nullptr;
+	}
+
+	Py_ssize_t n = PySequence_Size(search_list);
+	for (Py_ssize_t i = 0; i < n; ++i) {
+		PyObject* item = PySequence_GetItem(search_list, i);
+		if (!item) continue;
+
+		PyObject* matches = nullptr;
+		// Text search
+		if (PyUnicode_Check(item)) {
+			PyObject* args_text = Py_BuildValue("(O,s)", source_obj, PyUnicode_AsUTF8(item));
+			PyObject* kwargs_text = PyDict_New();
+			PyDict_SetItemString(kwargs_text, "threshold", PyFloat_FromDouble(threshold));
+			PyDict_SetItemString(kwargs_text, "text_level", PyLong_FromLong(text_level));
+			matches = chivel_find_text(self, args_text, kwargs_text);
+			Py_DECREF(args_text);
+			Py_DECREF(kwargs_text);
+		}
+		// Image search
+		else if (PyObject_TypeCheck(item, &CHIVELImageType)) {
+			PyObject* args_img = Py_BuildValue("(O,O)", source_obj, item);
+			PyObject* kwargs_img = PyDict_New();
+			PyDict_SetItemString(kwargs_img, "threshold", PyFloat_FromDouble(threshold));
+			matches = chivel_find_image(self, args_img, kwargs_img);
+			Py_DECREF(args_img);
+			Py_DECREF(kwargs_img);
+		}
+		Py_DECREF(item);
+
+		if (matches && PyList_Check(matches) && PyList_Size(matches) > 0) {
+			Py_INCREF(matches);
+			return matches;
+		}
+		Py_XDECREF(matches);
+	}
+	Py_RETURN_NONE;
+}
+
+static PyObject* chivel_find_all(PyObject* self, PyObject* args, PyObject* kwargs) {
+	PyObject* source_obj = nullptr;
+	PyObject* search_list = nullptr;
+	double threshold = chivel::DEFAULT_THRESHOLD;
+	int text_level = chivel::DEFAULT_TEXT_LEVEL;
+
+	static const char* kwlist[] = { "source", "search_list", "threshold", "text_level", nullptr };
+	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "OO|di", (char**)kwlist, &source_obj, &search_list, &threshold, &text_level))
+		return nullptr;
+
+	if (!PyObject_TypeCheck(source_obj, &CHIVELImageType)) {
+		PyErr_SetString(PyExc_TypeError, "source must be a chivel.Image object");
+		return nullptr;
+	}
+
+	if (!PyList_Check(search_list) && !PyTuple_Check(search_list)) {
+		PyErr_SetString(PyExc_TypeError, "search_list must be a list or tuple");
+		return nullptr;
+	}
+
+	PyObject* all_matches = PyList_New(0);
+	Py_ssize_t n = PySequence_Size(search_list);
+	for (Py_ssize_t i = 0; i < n; ++i) {
+		PyObject* item = PySequence_GetItem(search_list, i);
+		if (!item) continue;
+
+		PyObject* matches = nullptr;
+		// Text search
+		if (PyUnicode_Check(item)) {
+			PyObject* args_text = Py_BuildValue("Osdi", source_obj, PyUnicode_AsUTF8(item), threshold, text_level);
+			matches = chivel_find_text(self, args_text, nullptr);
+			Py_DECREF(args_text);
+		}
+		// Image search
+		else if (PyObject_TypeCheck(item, &CHIVELImageType)) {
+			PyObject* args_img = Py_BuildValue("OOd", source_obj, item, threshold);
+			matches = chivel_find_image(self, args_img, nullptr);
+			Py_DECREF(args_img);
+		}
+		Py_DECREF(item);
+
+		if (matches && PyList_Check(matches)) {
+			Py_ssize_t m = PyList_Size(matches);
+			for (Py_ssize_t j = 0; j < m; ++j) {
+				PyObject* match = PyList_GetItem(matches, j); // Borrowed ref
+				Py_INCREF(match);
+				PyList_Append(all_matches, match);
+				Py_DECREF(match);
+			}
+		}
+		Py_XDECREF(matches);
+	}
+	return all_matches;
+}
+
+static PyObject* chivel_expect_any(PyObject* self, PyObject* args, PyObject* kwargs) {
+	PyObject* search_list = nullptr;
+	int display_index = chivel::DEFAULT_DISPLAY_INDEX;
+	double threshold = chivel::DEFAULT_THRESHOLD;
+	int text_level = chivel::DEFAULT_TEXT_LEVEL;
+	double timeout = chivel::DEFAULT_TIMEOUT_SECONDS;
+	double interval = chivel::DEFAULT_INTERVAL_SECONDS;
+
+	static const char* kwlist[] = { "search_list", "display_index", "threshold", "text_level", "timeout", "interval", nullptr };
+	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O|ididd", (char**)kwlist, &search_list, &display_index, &threshold, &text_level, &timeout, &interval))
+		return nullptr;
+
+	if (!PyList_Check(search_list) && !PyTuple_Check(search_list)) {
+		PyErr_SetString(PyExc_TypeError, "search_list must be a list or tuple");
+		return nullptr;
+	}
+
+	if (interval <= 0.0) interval = chivel::DEFAULT_INTERVAL_SECONDS;
+
+	double elapsed = 0.0;
+
+	while (timeout < 0.0f || elapsed < timeout) {
+		cv::Mat img = chivel::captureScreen(display_index);
+		if (img.empty()) {
+			PyErr_SetString(PyExc_RuntimeError, "Failed to capture screen");
+			return nullptr;
+		}
+		PyObject* image_obj = CHIVELImage_new(&CHIVELImageType, nullptr, nullptr);
+		if (!image_obj)
+			return nullptr;
+		CHIVELImageObject* image = (CHIVELImageObject*)image_obj;
+		delete image->mat;
+		image->mat = new cv::Mat(img);
+		image->color_space = COLOR_SPACE_DEFAULT;
+
+		Py_ssize_t n = PySequence_Size(search_list);
+		for (Py_ssize_t i = 0; i < n; ++i) {
+			PyObject* item = PySequence_GetItem(search_list, i);
+			if (!item) {
+				Py_DECREF(image_obj);
+				continue;
+			}
+
+			PyObject* matches = nullptr;
+			if (PyUnicode_Check(item)) {
+				PyObject* args_text = Py_BuildValue("Osdi", image_obj, PyUnicode_AsUTF8(item), threshold, text_level);
+				matches = chivel_find_text(self, args_text, nullptr);
+				Py_DECREF(args_text);
+			}
+			else if (PyObject_TypeCheck(item, &CHIVELImageType)) {
+				PyObject* args_img = Py_BuildValue("OOd", image_obj, item, threshold);
+				matches = chivel_find_image(self, args_img, nullptr);
+				Py_DECREF(args_img);
+			}
+			Py_DECREF(item);
+
+			if (matches && PyList_Check(matches) && PyList_Size(matches) > 0) {
+				PyObject* first_match = PyList_GetItem(matches, 0); // Borrowed ref
+				Py_INCREF(first_match);
+				Py_DECREF(matches);
+				Py_DECREF(image_obj);
+				return first_match;
+			}
+			Py_XDECREF(matches);
+		}
+		Py_DECREF(image_obj);
+		chivel::wait(interval);
+		elapsed += interval;
+	}
+	Py_RETURN_NONE;
+}
+
+static PyObject* chivel_expect_all(PyObject* self, PyObject* args, PyObject* kwargs) {
+	PyObject* search_list = nullptr;
+	int display_index = chivel::DEFAULT_DISPLAY_INDEX;
+	double threshold = chivel::DEFAULT_THRESHOLD;
+	int text_level = chivel::DEFAULT_TEXT_LEVEL;
+	double timeout = chivel::DEFAULT_TIMEOUT_SECONDS;
+	double interval = chivel::DEFAULT_INTERVAL_SECONDS;
+
+	static const char* kwlist[] = { "search_list", "display_index", "threshold", "text_level", "timeout", "interval", nullptr };
+	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O|ididd", (char**)kwlist, &search_list, &display_index, &threshold, &text_level, &timeout, &interval))
+		return nullptr;
+
+	if (!PyList_Check(search_list) && !PyTuple_Check(search_list)) {
+		PyErr_SetString(PyExc_TypeError, "search_list must be a list or tuple");
+		return nullptr;
+	}
+
+	if (interval <= 0.0) interval = chivel::DEFAULT_INTERVAL_SECONDS;
+
+	double elapsed = 0.0;
+
+	while (timeout < 0.0f || elapsed < timeout) {
+		cv::Mat img = chivel::captureScreen(display_index);
+		if (img.empty()) {
+			PyErr_SetString(PyExc_RuntimeError, "Failed to capture screen");
+			return nullptr;
+		}
+		PyObject* image_obj = CHIVELImage_new(&CHIVELImageType, nullptr, nullptr);
+		if (!image_obj)
+			return nullptr;
+		CHIVELImageObject* image = (CHIVELImageObject*)image_obj;
+		delete image->mat;
+		image->mat = new cv::Mat(img);
+		image->color_space = COLOR_SPACE_DEFAULT;
+
+		PyObject* all_matches = PyList_New(0);
+		Py_ssize_t n = PySequence_Size(search_list);
+		for (Py_ssize_t i = 0; i < n; ++i) {
+			PyObject* item = PySequence_GetItem(search_list, i);
+			if (!item) {
+				Py_DECREF(image_obj);
+				continue;
+			}
+
+			PyObject* matches = nullptr;
+			if (PyUnicode_Check(item)) {
+				PyObject* args_text = Py_BuildValue("Osdi", image_obj, PyUnicode_AsUTF8(item), threshold, text_level);
+				matches = chivel_find_text(self, args_text, nullptr);
+				Py_DECREF(args_text);
+			}
+			else if (PyObject_TypeCheck(item, &CHIVELImageType)) {
+				PyObject* args_img = Py_BuildValue("OOd", image_obj, item, threshold);
+				matches = chivel_find_image(self, args_img, nullptr);
+				Py_DECREF(args_img);
+			}
+			Py_DECREF(item);
+
+			if (matches && PyList_Check(matches)) {
+				Py_ssize_t m = PyList_Size(matches);
+				for (Py_ssize_t j = 0; j < m; ++j) {
+					PyObject* match = PyList_GetItem(matches, j); // Borrowed ref
+					Py_INCREF(match);
+					PyList_Append(all_matches, match);
+					Py_DECREF(match);
+				}
+			}
+			Py_XDECREF(matches);
+		}
+		Py_DECREF(image_obj);
+		if (PyList_Size(all_matches) > 0) {
+			return all_matches;
+		}
+		Py_DECREF(all_matches);
+		chivel::wait(interval);
+		elapsed += interval;
+	}
+	Py_RETURN_NONE;
 }
 
 static PyObject* chivel_mouse_move(PyObject* self, PyObject* args, PyObject* kwds) {
 	PyObject* pos_obj = nullptr;
-	int display_index = 0;
+	int display_index = chivel::DEFAULT_DISPLAY_INDEX;
 	static const char* kwlist[] = { "pos", "display_index", nullptr };
 
 	if (!PyArg_ParseTupleAndKeywords(args, kwds, "O|i", (char**)kwlist, &pos_obj, &display_index))
@@ -2696,49 +3051,132 @@ static PyObject* chivel_mouse_scroll(PyObject* self, PyObject* args, PyObject* k
 }
 
 static PyObject* chivel_type(PyObject* self, PyObject* args, PyObject* kwds) {
-	const char* text;
+	PyObject* input_obj = nullptr;
 	double wait = 0.05;
 	static const char* kwlist[] = { "text", "wait", nullptr };
-	if (!PyArg_ParseTupleAndKeywords(args, kwds, "s|d", (char**)kwlist, &text, &wait))
+	if (!PyArg_ParseTupleAndKeywords(args, kwds, "O|d", (char**)kwlist, &input_obj, &wait))
 		return nullptr;
-
-	if (!text) {
-		PyErr_SetString(PyExc_ValueError, "Text must not be null");
-		return nullptr;
-	}
-
-	// Convert to wide string for Unicode support
-	int wlen = MultiByteToWideChar(CP_UTF8, 0, text, -1, nullptr, 0);
-	if (wlen <= 1) {
-		PyErr_SetString(PyExc_ValueError, "Failed to convert text to wide string");
-		return nullptr;
-	}
-	std::wstring wtext(wlen - 1, L'\0');
-	MultiByteToWideChar(CP_UTF8, 0, text, -1, &wtext[0], wlen);
 
 	DWORD ms = static_cast<DWORD>(wait * 1000.0);
-	for (size_t i = 0; i < wtext.size(); i++)
-	{
-		wchar_t ch = wtext[i];
 
-		// Prepare a KEYBDINPUT for the character
+	auto type_string = [&](const char* text) {
+		if (!text) return false;
+		int wlen = MultiByteToWideChar(CP_UTF8, 0, text, -1, nullptr, 0);
+		if (wlen <= 1) return false;
+		std::wstring wtext(wlen - 1, L'\0');
+		MultiByteToWideChar(CP_UTF8, 0, text, -1, &wtext[0], wlen);
+		for (size_t i = 0; i < wtext.size(); i++) {
+			wchar_t ch = wtext[i];
+			INPUT input[2] = {};
+			input[0].type = INPUT_KEYBOARD;
+			input[0].ki.wVk = 0;
+			input[0].ki.wScan = ch;
+			input[0].ki.dwFlags = KEYEVENTF_UNICODE;
+			input[1] = input[0];
+			input[1].ki.dwFlags = KEYEVENTF_UNICODE | KEYEVENTF_KEYUP;
+			SendInput(2, input, sizeof(INPUT));
+			if (i < wtext.size() - 1) Sleep(ms);
+		}
+		return true;
+		};
+
+	auto type_key = [&](int key) {
 		INPUT input[2] = {};
 		input[0].type = INPUT_KEYBOARD;
-		input[0].ki.wVk = 0;
-		input[0].ki.wScan = ch;
-		input[0].ki.dwFlags = KEYEVENTF_UNICODE;
-
-		input[1] = input[0];
-		input[1].ki.dwFlags = KEYEVENTF_UNICODE | KEYEVENTF_KEYUP;
-
-		// Send key down and key up
+		input[0].ki.wVk = key;
+		input[0].ki.dwFlags = 0;
+		input[1].type = INPUT_KEYBOARD;
+		input[1].ki.wVk = key;
+		input[1].ki.dwFlags = KEYEVENTF_KEYUP;
 		SendInput(2, input, sizeof(INPUT));
+		Sleep(ms);
+		};
 
-		// Wait between keys
-		if (i < wtext.size() - 1) // Don't wait after the last character
-		{
-			Sleep(ms);
+	auto do_wait = [](double seconds) {
+		if (seconds > 0) {
+			chivel::wait(seconds);
 		}
+		};
+
+	if (PyUnicode_Check(input_obj)) {
+		const char* text = PyUnicode_AsUTF8(input_obj);
+		if (!type_string(text)) {
+			PyErr_SetString(PyExc_ValueError, "Failed to convert text to wide string");
+			return nullptr;
+		}
+	}
+	else if (PyList_Check(input_obj)) {
+		Py_ssize_t n = PyList_Size(input_obj);
+		for (Py_ssize_t i = 0; i < n; ++i) {
+			PyObject* item = PyList_GetItem(input_obj, i); // Borrowed ref
+			if (PyUnicode_Check(item)) {
+				const char* text = PyUnicode_AsUTF8(item);
+				if (!type_string(text)) {
+					PyErr_SetString(PyExc_ValueError, "Failed to convert text to wide string in list");
+					return nullptr;
+				}
+			}
+			else if (PyLong_Check(item)) {
+				int key = (int)PyLong_AsLong(item);
+				if (key < 1 || key > 0xFF) {
+					double seconds = PyLong_AsDouble(item);
+					if (seconds > 0) {
+						do_wait(seconds);
+					}
+					else {
+						PyErr_SetString(PyExc_ValueError, "Key must be a valid virtual-key code (1-255) or a positive number for wait");
+						return nullptr;
+					}
+				}
+				else {
+					type_key(key);
+				}
+			}
+			else if (PyFloat_Check(item)) {
+				double seconds = PyFloat_AsDouble(item);
+				if (seconds > 0) {
+					do_wait(seconds);
+				}
+				else {
+					PyErr_SetString(PyExc_ValueError, "Wait time must be positive");
+					return nullptr;
+				}
+			}
+			else {
+				PyErr_SetString(PyExc_TypeError, "List items must be str, int (virtual-key code or seconds), or float (seconds)");
+				return nullptr;
+			}
+		}
+	}
+	else if (PyLong_Check(input_obj)) {
+		int key = (int)PyLong_AsLong(input_obj);
+		if (key < 1 || key > 0xFF) {
+			double seconds = PyLong_AsDouble(input_obj);
+			if (seconds > 0) {
+				do_wait(seconds);
+			}
+			else {
+				PyErr_SetString(PyExc_ValueError, "Key must be a valid virtual-key code (1-255) or a positive number for wait");
+				return nullptr;
+			}
+		}
+		else {
+			type_key(key);
+		}
+	}
+	else if (PyFloat_Check(input_obj)) {
+		double seconds = PyFloat_AsDouble(input_obj);
+		if (seconds > 0) {
+			do_wait(seconds);
+		}
+		else {
+			PyErr_SetString(PyExc_ValueError, "Wait time must be positive");
+			return nullptr;
+		}
+	}
+	else {
+		PyErr_SetString(PyExc_TypeError, "Argument must be str, int, float, or list of str/int/float");
+		return nullptr;
 	}
 
 	Py_RETURN_NONE;
@@ -2839,8 +3277,7 @@ static PyObject* chivel_wait(PyObject* self, PyObject* args) {
 		return nullptr;
 	}
 
-	DWORD ms = static_cast<DWORD>(seconds * 1000.0);
-	Sleep(ms);
+	chivel::wait(seconds);
 
 	Py_RETURN_NONE;
 }
@@ -2946,7 +3383,7 @@ static PyObject* chivel_mouse_get_display(PyObject* self, PyObject* args) {
 }
 
 static PyObject* chivel_display_get_rect(PyObject* self, PyObject* args) {
-	int display_index = 0;
+	int display_index = chivel::DEFAULT_DISPLAY_INDEX;
 	if (!PyArg_ParseTuple(args, "|i", &display_index))
 		return nullptr;
 
@@ -3042,7 +3479,7 @@ static int chivel_module_exec(PyObject* module)
 	PyModule_AddIntConstant(module, "DISPLAY_COUNT", chivel::get_display_count());
 
 	// Keys
-    PyModule_AddIntConstant(module, "KEY_META", VK_LWIN);
+	PyModule_AddIntConstant(module, "KEY_META", VK_LWIN);
 	PyModule_AddIntConstant(module, "KEY_TAB", VK_TAB);
 	PyModule_AddIntConstant(module, "KEY_ENTER", VK_RETURN);
 	PyModule_AddIntConstant(module, "KEY_SHIFT", VK_SHIFT);
@@ -3177,6 +3614,10 @@ static PyMethodDef chivelMethods[] = {
 	{"capture", (PyCFunction)chivel_capture, METH_VARARGS | METH_KEYWORDS, "Capture the screen or a specific rectangle"},
 	{"find_image", (PyCFunction)chivel_find_image, METH_VARARGS | METH_KEYWORDS, "Find images within an image"},
 	{"find_text", (PyCFunction)chivel_find_text, METH_VARARGS | METH_KEYWORDS, "Find text within an image"},
+	{"find_any", (PyCFunction)chivel_find_any, METH_VARARGS | METH_KEYWORDS, "Find any image or text within an image"},
+	{"find_all", (PyCFunction)chivel_find_all, METH_VARARGS | METH_KEYWORDS, "Find all images or text within an image"},
+	{"expect_any", (PyCFunction)chivel_expect_any, METH_VARARGS | METH_KEYWORDS, "Wait for any match in a list to appear within a timeout"},
+	{"expect_all", (PyCFunction)chivel_expect_all, METH_VARARGS | METH_KEYWORDS, "Wait for all matches in a list to appear within a timeout"},
 	{"wait", chivel_wait, METH_VARARGS, "Wait for a specified number of seconds"},
 	{"mouse_move", (PyCFunction)chivel_mouse_move, METH_VARARGS | METH_KEYWORDS, "Move the mouse cursor to a specific position or rectangle on a display"},
 	{"mouse_click", (PyCFunction)chivel_mouse_click, METH_VARARGS | METH_KEYWORDS, "Click the mouse button"},
