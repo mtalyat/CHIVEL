@@ -1,4 +1,12 @@
 @echo off
+
+set "CURRENT_DIR=%~dp0"
+echo %CURRENT_DIR% | findstr /i "Release" >nul
+if %errorlevel% neq 0 (
+	echo Error: This script must be run from within the Release directory.
+	exit /b 1
+)
+
 echo Building the project...
 cd %~dp0
 python -m build

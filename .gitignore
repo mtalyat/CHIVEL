@@ -398,7 +398,3 @@ FodyWeavers.xsd
 *.sln.iml
 
 *.vsix
-
-# Chivel
-**/dist/*
-**/*egg-info/*
