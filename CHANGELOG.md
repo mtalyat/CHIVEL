@@ -1,5 +1,8 @@
 # Change log
 
+## 0.6.1
+- Fix PyPI upload.
+
 ## 0.6.0
 - Fix dependencies.
 - Split find into find_image and find_text.
