@@ -2708,11 +2708,8 @@ static PyObject* chivel_expect_any(PyObject* self, PyObject* args, PyObject* kwa
 			Py_DECREF(item);
 
 			if (matches && PyList_Check(matches) && PyList_Size(matches) > 0) {
-				PyObject* first_match = PyList_GetItem(matches, 0); // Borrowed ref
-				Py_INCREF(first_match);
-				Py_DECREF(matches);
 				Py_DECREF(image_obj);
-				return first_match;
+				return matches;
 			}
 			Py_XDECREF(matches);
 		}
