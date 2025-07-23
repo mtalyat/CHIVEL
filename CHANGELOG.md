@@ -1,5 +1,8 @@
 # Change log
 
+## 0.6.3
+- Fix find_image.
+
 ## 0.6.2
 - Fix expect_any function return object.
 

@@ -4,7 +4,9 @@
 #include <opencv2/opencv.hpp>
 #include <tesseract/baseapi.h>
 #include <leptonica/allheaders.h>
-#include <Python.h>
+//// Define the stable Python API version
+//#define Py_LIMITED_API 0x03000000
+#include <Python.h> 
 #include <Windows.h>
 #include <ShellScalingAPI.h> // For GetDpiForMonitor
 #include <structmember.h>
@@ -2365,7 +2367,7 @@ static PyObject* chivel_find_image(PyObject* self, PyObject* args, PyObject* kwa
 	PyObject* search_obj;
 	double threshold = chivel::DEFAULT_THRESHOLD; // Default threshold for match quality
 
-	static const char* kwlist[] = { "source", "search", "threshold" };
+	static const char* kwlist[] = { "source", "search", "threshold", nullptr };
 	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "OO|d", (char**)kwlist, &source_obj, &search_obj, &threshold))
 		return nullptr;
 

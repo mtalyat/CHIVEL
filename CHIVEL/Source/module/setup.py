@@ -2,12 +2,18 @@ from setuptools import setup
 
 setup(
     name="chivel",
-    version="0.6.2",
+    version="0.6.3",
     description="For easily interfacing with the screen, just as a human would.",
     long_description=open("README.md", encoding="utf-8").read(),
     long_description_content_type="text/markdown",
     # long_description="Chivel is a Python module that allows you to interact with the screen in a way that mimics human behavior. It provides functions for recording and playing back mouse and keyboard actions, making it useful for automation tasks.",
     author="Mitchell Talyat",
+    python_requires="==3.13.*",
+    classifiers=[
+        "Programming Language :: Python :: 3.13",
+        "Programming Language :: Python :: 3 :: Only",
+        "Operating System :: Microsoft :: Windows",
+    ],
     packages=["chivel"],
     package_dir={"chivel": "chivel"},
     package_data={"chivel": [
