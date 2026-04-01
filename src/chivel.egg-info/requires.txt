@@ -1,0 +1,10 @@
+numpy>=1.24
+opencv-python>=4.8
+mss>=9.0
+pynput>=1.7
+rapidocr-onnxruntime>=1.2
+
+[dev]
+pytest>=7.0
+mypy>=1.8
+ruff>=0.5

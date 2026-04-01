@@ -1,5 +1,19 @@
 # Change log
 
+## 0.7.0
+- Rework entire library to use raw Python to help avoid Python version dependencies.
+- Changed OCR library to rapidocr-onnxruntime.
+- Add primary display setter/getter. This makes capture(), mouse_move(), etc. relative to the given display.
+- Add regex support for text finding.
+- Rework recording:
+    - Now uses json and pngs for storage.
+    - Allow for "steps" to be taken.
+- Add playback function, play(), for recordings.
+- Add wait_for key function.
+- Many functions now allow for multiple keys to be passed in to do at the same time, such as key_click().
+- Add image show function.
+- General improvements.
+
 ## 0.6.3
 - Fix find_image.
 

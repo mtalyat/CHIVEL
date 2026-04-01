@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "chivel"
+version = "0.7.0"
+description = "Computer vision, OCR, and input automation toolkit"
+readme = "README.md"
+requires-python = ">=3.8"
+authors = [{ name = "CHIVEL" }]
+license = { text = "MIT" }
+dependencies = [
+  "numpy>=1.24",
+  "opencv-python>=4.8",
+  "mss>=9.0",
+  "pynput>=1.7",
+  "rapidocr-onnxruntime>=1.2",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=7.0",
+  "mypy>=1.8",
+  "ruff>=0.5",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+chivel = ["models/**/*"]

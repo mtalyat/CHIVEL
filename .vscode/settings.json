@@ -1,6 +1,0 @@
-{
-    "files.associations": {
-        "*.chisl": "chisl",
-        "chrono": "cpp"
-    }
-}

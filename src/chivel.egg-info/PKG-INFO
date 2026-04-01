@@ -1,8 +1,22 @@
+Metadata-Version: 2.4
+Name: chivel
+Version: 0.7.0
+Summary: Computer vision, OCR, and input automation toolkit
+Author: CHIVEL
+License: MIT
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+Requires-Dist: numpy>=1.24
+Requires-Dist: opencv-python>=4.8
+Requires-Dist: mss>=9.0
+Requires-Dist: pynput>=1.7
+Requires-Dist: rapidocr-onnxruntime>=1.2
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0; extra == "dev"
+Requires-Dist: mypy>=1.8; extra == "dev"
+Requires-Dist: ruff>=0.5; extra == "dev"
+
 # CHIVEL
-
-<img src='Images/icon.png' alt='The CHIVEL logo.' width=200px>
-
-CHIVEL, previously known as CHISL (Computer-Human Interaction Scripting Language) is a Python extension meant for controlling your device. It provides simple interfaces for finding things on the screen, controlling the keyboard/mouse, manipulating images, and more. This was originally its own scripting language, but was later revamped into a Python module, so that the powerful features of Python could be used in addition to the computer vision that CHIVEL provides. The project was also renamed from CHISL to CHIVEL, as CHISL was already taken on PyPI.
 
 CHIVEL is a Python automation toolkit for:
 
@@ -18,7 +32,7 @@ It is designed for practical desktop automation and test scripting.
 ## Install
 
 ```bash
-pip install chivel
+pip install -e .
 ```
 
 ## Quick Start
