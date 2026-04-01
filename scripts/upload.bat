@@ -15,9 +15,19 @@ if "%TWINE_USERNAME%"=="" (
 
 if "%TWINE_PASSWORD%"=="" (
   echo ERROR: TWINE_PASSWORD is not set.
-  echo Set it to your PyPI API token first:
+  echo Set it to your PyPI API token first.
+  echo.
+  echo PowerShell ^(current session^):
+  echo   $env:TWINE_PASSWORD="pypi-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  echo PowerShell ^(persist for future terminals^):
+  echo   setx TWINE_PASSWORD "pypi-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  echo CMD ^(current session^):
   echo   set TWINE_PASSWORD=pypi-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
   exit /b 1
+)
+
+if /I not "%TWINE_USERNAME%"=="__token__" (
+  echo WARNING: TWINE_USERNAME is "%TWINE_USERNAME%". PyPI API token uploads should use "__token__".
 )
 
 if not exist "dist\*" (
@@ -27,7 +37,7 @@ if not exist "dist\*" (
 )
 
 echo Uploading distributions to PyPI...
-.venv\Scripts\python.exe -m twine upload dist\*
+.venv\Scripts\python.exe -m twine upload dist\* %* --username %TWINE_USERNAME% --password %TWINE_PASSWORD%
 if errorlevel 1 exit /b 1
 
 echo.
