@@ -29,7 +29,7 @@ from .constants import (
     SIMPLIFY_MOUSE,
     SIMPLIFY_TIME,
 )
-from .core import Point
+from .core import Point, Rect
 from .capture import display_get_rect
 
 _mouse = mouse.Controller()
@@ -114,13 +114,19 @@ def _key_vk(value: Any) -> Optional[int]:
     return vk
 
 
-def mouse_move(pos: Any, display_index: Optional[int] = None, relative: bool = False) -> None:
+def _to_xy(pos: Any) -> Tuple[int, int]:
     if isinstance(pos, Point):
-        x, y = int(pos.x), int(pos.y)
-    elif isinstance(pos, (tuple, list)) and len(pos) >= 2:
-        x, y = int(pos[0]), int(pos[1])
-    else:
-        raise ValueError("pos must be Point or tuple/list(x, y)")
+        return int(pos.x), int(pos.y)
+    if isinstance(pos, Rect):
+        center = pos.center()
+        return int(center.x), int(center.y)
+    if isinstance(pos, (tuple, list)) and len(pos) >= 2:
+        return int(pos[0]), int(pos[1])
+    raise ValueError("pos must be Point, Rect, or tuple/list(x, y)")
+
+
+def mouse_move(pos: Any, display_index: Optional[int] = None, relative: bool = False) -> None:
+    x, y = _to_xy(pos)
 
     if relative:
         cx, cy = _mouse.position
@@ -184,6 +190,10 @@ def type(text: str, wait: float = 0.01) -> None:
         _keyboard.type(ch)
         if wait > 0:
             time.sleep(wait)
+
+
+def pause(prompt: str = "Press Enter to continue...") -> None:
+    input(prompt)
 
 
 def _normalize_keys(keys: Union[int, Sequence[int]]) -> List[int]:

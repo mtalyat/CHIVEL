@@ -29,6 +29,9 @@ class Rect:
     width: int
     height: int
 
+    def center(self) -> Point:
+        return Point(self.x + (self.width // 2), self.y + (self.height // 2))
+
     def get_position(self) -> Point:
         return Point(self.x, self.y)
 

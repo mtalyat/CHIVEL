@@ -1,5 +1,10 @@
 # Change log
 
+## 0.7.1
+- Add pause() method which will pause execution and wait for input in the terminal.
+- Rects now have a center() function.
+- You can now pass rects into mouse_move(), etc.
+
 ## 0.7.0
 - Rework entire library to use raw Python to help avoid Python version dependencies.
 - Changed OCR library to rapidocr-onnxruntime.

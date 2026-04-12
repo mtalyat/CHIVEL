@@ -197,11 +197,24 @@ Moves mouse.
 
 - relative=False: pos is display-local coordinate
 - relative=True: pos is delta from current position
+- pos can be Point, Rect, or (x, y)
+- when pos is Rect, CHIVEL moves to rect center
 
 ```python
 cv.mouse_move((200, 150))
 cv.mouse_move((20, -10), relative=True)
 cv.mouse_move((100, 100), display_index=0)
+cv.mouse_move(cv.Rect(300, 200, 120, 40))  # moves to center
+```
+
+### Rect.center()
+
+Returns center point of a Rect.
+
+```python
+rect = cv.Rect(100, 50, 200, 80)
+pt = rect.center()
+print(pt.x, pt.y)
 ```
 
 ### mouse_click(button=BUTTON_LEFT, count=1, delay=None)
@@ -299,6 +312,15 @@ Waits for one of the requested keys and returns pressed key code.
 ```python
 k = cv.wait_for([cv.KEY_ENTER, cv.KEY_ESC])
 print(k)
+```
+
+### pause(prompt="Press Enter to continue...")
+
+Blocks execution until Enter is pressed in the terminal.
+
+```python
+cv.pause()
+cv.pause("Press Enter when setup is complete...")
 ```
 
 ## Recording and Playback APIs
