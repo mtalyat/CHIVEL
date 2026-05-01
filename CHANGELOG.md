@@ -1,5 +1,29 @@
 # Change log
 
+## 0.7.8
+- Fix syntax errors.
+
+## 0.7.7
+- Change KEY_ESC to KEY_ESCAPE.
+
+## 0.7.6
+- Replace clipboard code with pyperclip.
+
+## 0.7.5
+- Small code reorg.
+
+## 0.7.4
+- Fix syntax error.
+
+## 0.7.3
+- Add get_clipboard and set_clipboard.
+
+## 0.7.2
+- Add check_for() in order to check for buttons/keys being pressed down for any instance in time.
+- Added an optional timeout for wait_for().
+- wait_for() now also accepts buttons.
+- Fixed argument name inconsistencies.
+
 ## 0.7.1
 - Add pause() method which will pause execution and wait for input in the terminal.
 - Rects now have a center() function.

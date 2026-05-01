@@ -1,6 +1,6 @@
 # CHIVEL
 
-<img src='Images/icon.png' alt='The CHIVEL logo.' width=200px>
+<img src='https://raw.githubusercontent.com/mtalyat/CHIVEL/refs/heads/main/Images/icon.png' alt='The CHIVEL logo.' width=200px>
 
 CHIVEL, previously known as CHISL (Computer-Human Interaction Scripting Language) is a Python extension meant for controlling your device. It provides simple interfaces for finding things on the screen, controlling the keyboard/mouse, manipulating images, and more. This was originally its own scripting language, but was later revamped into a Python module, so that the powerful features of Python could be used in addition to the computer vision that CHIVEL provides. The project was also renamed from CHISL to CHIVEL, as CHISL was already taken on PyPI.
 
@@ -267,13 +267,14 @@ print(cv.mouse_get_display())
 
 ## Keyboard APIs
 
-### type(text, wait=0.01)
 
-Types text character-by-character.
+### type(text, delay=0.01)
+
+Types text character-by-character, with a delay between each character.
 
 ```python
 cv.type("hello")
-cv.type("slow", wait=0.05)
+cv.type("slow", delay=0.05)
 ```
 
 ### key_click(keys, count=1, delay=None)
@@ -305,13 +306,47 @@ Release one or more keys.
 cv.key_up([cv.KEY_CTRL, cv.KEY_SHIFT])
 ```
 
-### wait_for(keys)
 
-Waits for one of the requested keys and returns pressed key code.
+
+### wait_for(keys_or_buttons, delay=0.01, timeout=-1)
+
+Waits for one of the requested keys or mouse buttons and returns the code. If timeout is set (>0), returns None if no input is detected in that time.
 
 ```python
-k = cv.wait_for([cv.KEY_ENTER, cv.KEY_ESC])
-print(k)
+# Wait for Enter, Escape, or left mouse button, with a 5 second timeout
+k = cv.wait_for([cv.KEY_ENTER, cv.KEY_ESCAPE, cv.BUTTON_LEFT], timeout=5.0)
+if k is None:
+	print("Timed out!")
+else:
+	print("Pressed:", k)
+```
+### get_clipboard()
+
+Returns the current clipboard text as a string. Returns an empty string if the clipboard is empty or unavailable.
+
+```python
+text = cv.get_clipboard()
+print("Clipboard:", text)
+```
+
+### set_clipboard(text)
+
+Sets the clipboard text to the given string.
+
+```python
+cv.set_clipboard("Hello from CHIVEL!")
+```
+
+### check_for(keys_or_buttons)
+
+Checks if any key or mouse button in the sequence is currently pressed. Returns the first code found, or None if none are pressed.
+
+```python
+pressed = cv.check_for([cv.KEY_CTRL, cv.KEY_SHIFT, cv.BUTTON_LEFT])
+if pressed:
+	print(f"Pressed: {pressed}")
+else:
+	print("None pressed")
 ```
 
 ### pause(prompt="Press Enter to continue...")
@@ -325,7 +360,7 @@ cv.pause("Press Enter when setup is complete...")
 
 ## Recording and Playback APIs
 
-### record(output_dir=None, simplify=0, simplify_threshold=None, stop_key=KEY_ESC, step_key=None, step_size=(50, 50))
+### record(output_dir=None, simplify=0, simplify_threshold=None, stop_key=KEY_ESCAPE, step_key=None, step_size=(50, 50))
 
 Records input events and returns Recording.
 
@@ -367,7 +402,7 @@ How simplify_threshold works:
 
 ```python
 # Normal recording
-rec = cv.record(output_dir="out_record", stop_key=cv.KEY_ESC)
+rec = cv.record(output_dir="out_record", stop_key=cv.KEY_ESCAPE)
 
 # Step recording (F8)
 rec2 = cv.record(
@@ -445,7 +480,7 @@ CHIVEL exports useful constants for mouse buttons, keyboard virtual keys, color 
 Common examples:
 
 - BUTTON_LEFT, BUTTON_RIGHT, BUTTON_MIDDLE
-- KEY_ENTER, KEY_ESC, KEY_CTRL, KEY_ALT, KEY_F1 through KEY_F12
+- KEY_ENTER, KEY_ESCAPE, KEY_CTRL, KEY_ALT, KEY_F1 through KEY_F12
 - SIMPLIFY_MOVE, SIMPLIFY_MOUSE, SIMPLIFY_KEY, SIMPLIFY_TIME, SIMPLIFY_ALL
 - FLIP_VERTICAL, FLIP_HORIZONTAL, FLIP_BOTH
 - COLOR_SPACE_BGR, COLOR_SPACE_BGRA, COLOR_SPACE_RGB, COLOR_SPACE_RGBA, COLOR_SPACE_GRAY, COLOR_SPACE_HSV

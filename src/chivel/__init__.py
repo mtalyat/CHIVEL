@@ -6,6 +6,7 @@ from .input import (
     key_click,
     key_down,
     key_up,
+    check_for,
     pause,
     wait_for,
     mouse_click,
@@ -19,6 +20,8 @@ from .input import (
     record,
     play,
     type,
+    get_clipboard,
+    set_clipboard,
 )
 from .io import load, save, show
 
@@ -51,6 +54,7 @@ __all__ = [
     "key_click",
     "key_down",
     "key_up",
+    "check_for",
     "wait_for",
     "Recording",
     "record",
@@ -59,4 +63,6 @@ __all__ = [
     "set_primary_display",
     "get_primary_display",
     "DISPLAY_COUNT",
+    "get_clipboard",
+    "set_clipboard",
 ]

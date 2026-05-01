@@ -1,4 +1,58 @@
+
+# Future imports
 from __future__ import annotations
+
+# Standard library imports
+import sys
+import json
+import time
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+
+# Third-party imports
+import pyperclip
+
+# Third-party imports
+import cv2
+import numpy as np
+from mss import mss
+from pynput import keyboard, mouse
+
+# Internal imports
+from .constants import (
+    BUTTON_LEFT,
+    BUTTON_MIDDLE,
+    BUTTON_RIGHT,
+    KEY_ALT,
+    KEY_CTRL,
+    KEY_ENTER,
+    KEY_ESCAPE,
+    KEY_META,
+    KEY_SHIFT,
+    KEY_SPACE,
+    KEY_TAB,
+    SIMPLIFY_KEY,
+    SIMPLIFY_MOVE,
+    SIMPLIFY_MOUSE,
+    SIMPLIFY_TIME,
+)
+from .core import Point, Rect
+from .capture import display_get_rect
+
+def get_clipboard() -> str:
+    """Get the current text from the clipboard."""
+    try:
+        return pyperclip.paste()
+    except Exception:
+        return ''
+
+def set_clipboard(text: str) -> None:
+    """Set the clipboard text to the given value."""
+    try:
+        pyperclip.copy(text)
+    except Exception:
+        pass
 
 import json
 import time
@@ -19,7 +73,7 @@ from .constants import (
     KEY_ALT,
     KEY_CTRL,
     KEY_ENTER,
-    KEY_ESC,
+    KEY_ESCAPE,
     KEY_META,
     KEY_SHIFT,
     KEY_SPACE,
@@ -40,7 +94,7 @@ _keyboard = keyboard.Controller()
 class Recording:
     version: int = 1
     recorded_at: float = 0.0
-    stop_key: int = KEY_ESC
+    stop_key: int = KEY_ESCAPE
     events: List[Dict[str, Any]] = field(default_factory=list)
     # Set on load; not serialised. Used to resolve relative step image paths.
     source_path: Optional[str] = field(default=None, compare=False, repr=False)
@@ -58,7 +112,7 @@ class Recording:
         return cls(
             version=int(data.get("version", 1)),
             recorded_at=float(data.get("recorded_at", 0.0)),
-            stop_key=int(data.get("stop_key", KEY_ESC)),
+            stop_key=int(data.get("stop_key", KEY_ESCAPE)),
             events=list(data.get("events", [])),
         )
 
@@ -95,7 +149,7 @@ def _key(value: int):
         KEY_META: keyboard.Key.cmd,
         KEY_ENTER: keyboard.Key.enter,
         KEY_TAB: keyboard.Key.tab,
-        KEY_ESC: keyboard.Key.esc,
+        KEY_ESCAPE: keyboard.Key.esc,
         KEY_SPACE: keyboard.Key.space,
     }
     if value in special:
@@ -139,6 +193,9 @@ def mouse_move(pos: Any, display_index: Optional[int] = None, relative: bool = F
 
 
 def mouse_click(button: int = BUTTON_LEFT, count: int = 1, delay: Optional[float] = None) -> None:
+    """
+    Click a mouse button one or more times, with a delay between clicks.
+    """
     if delay is None:
         delay = 0.0 if count <= 1 else 0.1
     btn = _btn(button)
@@ -185,11 +242,14 @@ def _display_index_for_point(x: int, y: int) -> int:
     return -1
 
 
-def type(text: str, wait: float = 0.01) -> None:
+def type(text: str, delay: float = 0.01) -> None:
+    """
+    Types text character by character, with a delay between each character.
+    """
     for ch in text:
         _keyboard.type(ch)
-        if wait > 0:
-            time.sleep(wait)
+        if delay > 0:
+            time.sleep(delay)
 
 
 def pause(prompt: str = "Press Enter to continue...") -> None:
@@ -206,6 +266,9 @@ def _normalize_keys(keys: Union[int, Sequence[int]]) -> List[int]:
 
 
 def key_click(keys: Union[int, Sequence[int]], count: int = 1, delay: Optional[float] = None) -> None:
+    """
+    Press and release one or more keys, optionally multiple times, with a delay between presses.
+    """
     normalized = _normalize_keys(keys)
     if delay is None:
         delay = 0.0 if len(normalized) <= 1 else 0.1
@@ -228,31 +291,93 @@ def key_up(keys: Union[int, Sequence[int]]) -> None:
         _keyboard.release(_key(key))
 
 
-def wait_for(keys: Union[int, Sequence[int]]) -> int:
-    if isinstance(keys, int):
-        wanted = {int(keys)}
+def wait_for(keys_or_buttons: Union[int, Sequence[int]], delay: float = 0.01, timeout: float = -1) -> Optional[int]:
+    """
+    Wait for one of the requested keys or mouse buttons to be pressed and return its code.
+    Supports both keyboard keys and mouse buttons. Polls at the given delay interval.
+    If timeout > 0, returns None if no input is detected within timeout seconds.
+    """
+    if isinstance(keys_or_buttons, int):
+        wanted = {int(keys_or_buttons)}
     else:
-        wanted = {int(k) for k in keys}
+        wanted = {int(k) for k in keys_or_buttons}
 
     if not wanted:
-        raise ValueError("keys must contain at least one key code")
+        raise ValueError("keys_or_buttons must contain at least one key/button code")
 
-    pressed = {"vk": None}
+    pressed = {"code": None}
 
-    def on_press(key: Any) -> Optional[bool]:
+    def on_press_key(key: Any) -> Optional[bool]:
         vk = _key_vk(key)
         if vk in wanted:
-            pressed["vk"] = int(vk)
+            pressed["code"] = int(vk)
             return False
         return None
 
-    listener = keyboard.Listener(on_press=on_press)
-    listener.start()
-    listener.join()
+    def on_click(x, y, button, pressed_state):
+        if not pressed_state:
+            return None
+        btn_map = {
+            BUTTON_LEFT: mouse.Button.left,
+            BUTTON_RIGHT: mouse.Button.right,
+            BUTTON_MIDDLE: mouse.Button.middle,
+        }
+        for code, btn in btn_map.items():
+            if btn == button and code in wanted:
+                pressed["code"] = code
+                return False
+        return None
 
-    if pressed["vk"] is None:
-        raise RuntimeError("wait_for ended without a matching key")
-    return int(pressed["vk"])
+    key_listener = keyboard.Listener(on_press=on_press_key)
+    mouse_listener = mouse.Listener(on_click=on_click)
+    key_listener.start()
+    mouse_listener.start()
+    start_time = time.time()
+    while pressed["code"] is None:
+        if timeout > 0 and (time.time() - start_time) >= timeout:
+            key_listener.stop()
+            mouse_listener.stop()
+            return None
+        time.sleep(delay)
+    key_listener.stop()
+    mouse_listener.stop()
+    return pressed["code"]
+
+
+def check_for(keys_or_buttons: Union[int, Sequence[int]]) -> Optional[int]:
+    """
+    Checks if any key or mouse button in the sequence is currently pressed.
+    Returns the first code found, or None if none are pressed.
+    """
+    if isinstance(keys_or_buttons, int):
+        wanted = [int(keys_or_buttons)]
+    else:
+        wanted = [int(k) for k in keys_or_buttons]
+    # Check keyboard
+    try:
+        import ctypes
+        user32 = ctypes.windll.user32
+        for code in wanted:
+            # Keyboard: 0x01..0xFE
+            if 0x01 <= code <= 0xFE:
+                state = user32.GetAsyncKeyState(code)
+                if state & 0x8000:
+                    return code
+        # Mouse buttons
+        btn_vk = {
+            BUTTON_LEFT: 0x01,
+            BUTTON_RIGHT: 0x02,
+            BUTTON_MIDDLE: 0x04,
+        }
+        for code in wanted:
+            vk = btn_vk.get(code)
+            if vk is not None:
+                state = user32.GetAsyncKeyState(vk)
+                if state & 0x8000:
+                    return code
+    except Exception:
+        pass
+    return None
 
 
 def _simplify_events(
@@ -301,7 +426,7 @@ def record(
     output_dir: Optional[str] = None,
     simplify: int = 0,
     simplify_threshold: Optional[float] = None,
-    stop_key: int = KEY_ESC,
+    stop_key: int = KEY_ESCAPE,
     step_key: Optional[int] = None,
     step_size: Tuple[int, int] = (50, 50),
 ) -> Recording:

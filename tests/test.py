@@ -20,8 +20,8 @@ def close_application() -> None:
 
 def should_test(name: str) -> bool:
     print(f'Prepare for {name} tests. Press "Enter" to continue, "Space" to skip, "Esc" to stop.')
-    key = cv.wait_for([cv.KEY_ENTER, cv.KEY_SPACE, cv.KEY_ESC])
-    if key == cv.KEY_ESC:
+    key = cv.wait_for([cv.KEY_ENTER, cv.KEY_SPACE, cv.KEY_ESCAPE])
+    if key == cv.KEY_ESCAPE:
         print("Test aborted.")
         exit(0)
     elif key == cv.KEY_SPACE:
