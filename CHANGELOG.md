@@ -1,5 +1,9 @@
 # Change log
 
+## 0.8.0
+- Add missing keys.
+- Fix syntax errors.
+
 ## 0.7.8
 - Fix syntax errors.
 

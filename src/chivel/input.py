@@ -305,7 +305,7 @@ def wait_for(keys_or_buttons: Union[int, Sequence[int]], delay: float = 0.01, ti
     if not wanted:
         raise ValueError("keys_or_buttons must contain at least one key/button code")
 
-    pressed = {"code": None}
+    pressed: dict[str, Optional[int]] = {"code": None}
 
     def on_press_key(key: Any) -> Optional[bool]:
         vk = _key_vk(key)

@@ -14,7 +14,11 @@ def load(path: str) -> Union[str, Image, List[Union[str, Image]]]:
         out: List[Union[str, Image]] = []
         for child in sorted(p.iterdir()):
             if child.is_file():
-                out.append(load(str(child)))
+                child_data = load(str(child))
+                if isinstance(child_data, list):
+                    out.extend(child_data)
+                else:
+                    out.append(child_data)
         return out
 
     suffix = p.suffix.lower()
@@ -27,10 +31,16 @@ def load(path: str) -> Union[str, Image, List[Union[str, Image]]]:
     return Image.from_array(arr)
 
 
-def save(image: Image, path: str) -> None:
-    ok = cv2.imwrite(path, image.array)
-    if not ok:
-        raise ValueError(f"Failed to save image to: {path}")
+def save(data: Image | str, path: str) -> None:
+    if isinstance(data, str):
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(data)
+    elif isinstance(data, Image):
+        ok = cv2.imwrite(path, data.array)
+        if not ok:
+            raise ValueError(f"Failed to save image to: {path}")
+    else:
+        raise ValueError(f"Unsupported data type: {type(data)}")
 
 
 def show(image: Image, name: str = "image", blocking: bool = True) -> None:
