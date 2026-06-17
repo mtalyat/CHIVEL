@@ -3,23 +3,23 @@
 from __future__ import annotations
 
 # Standard library imports
-import sys
+import ctypes
 import json
+import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
-
-# Third-party imports
-import pyperclip
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 # Third-party imports
 import cv2
 import numpy as np
+import pyperclip
 from mss import mss
 from pynput import keyboard, mouse
 
 # Internal imports
+from .capture import DISPLAY_COUNT, capture, display_get_rect
 from .constants import (
     BUTTON_LEFT,
     BUTTON_MIDDLE,
@@ -33,12 +33,11 @@ from .constants import (
     KEY_SPACE,
     KEY_TAB,
     SIMPLIFY_KEY,
-    SIMPLIFY_MOVE,
     SIMPLIFY_MOUSE,
+    SIMPLIFY_MOVE,
     SIMPLIFY_TIME,
 )
 from .core import Point, Rect
-from .capture import display_get_rect
 
 def get_clipboard() -> str:
     """Get the current text from the clipboard."""
@@ -54,37 +53,110 @@ def set_clipboard(text: str) -> None:
     except Exception:
         pass
 
-import json
-import time
-from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
-import cv2
-import numpy as np
+class _EventSlot:
+    def __init__(self, hook: "_EventHook", code: int):
+        self._hook = hook
+        self._code = int(code)
 
-from mss import mss
-from pynput import keyboard, mouse
+    def __iadd__(self, handler: Callable[..., Any]):
+        self._hook.add(self._code, handler)
+        return self
 
-from .constants import (
-    BUTTON_LEFT,
-    BUTTON_MIDDLE,
-    BUTTON_RIGHT,
-    KEY_ALT,
-    KEY_CTRL,
-    KEY_ENTER,
-    KEY_ESCAPE,
-    KEY_META,
-    KEY_SHIFT,
-    KEY_SPACE,
-    KEY_TAB,
-    SIMPLIFY_KEY,
-    SIMPLIFY_MOVE,
-    SIMPLIFY_MOUSE,
-    SIMPLIFY_TIME,
-)
-from .core import Point, Rect
-from .capture import display_get_rect
+    def __isub__(self, handler: Callable[..., Any]):
+        self._hook.remove(self._code, handler)
+        return self
+
+
+class _EventHook:
+    def __init__(self, name: str):
+        self.name = name
+        self._handlers: Dict[int, List[Callable[..., Any]]] = {}
+        self._global_handlers: List[Callable[..., Any]] = []
+
+    def __iadd__(self, handler: Callable[..., Any]):
+        self.add_global(handler)
+        return self
+
+    def __isub__(self, handler: Callable[..., Any]):
+        self.remove_global(handler)
+        return self
+
+    def __getitem__(self, code: int) -> _EventSlot:
+        return _EventSlot(self, int(code))
+
+    # Required so syntax like hook[key] += fn works without replacing storage.
+    def __setitem__(self, code: int, value: Any) -> None:
+        if isinstance(value, _EventSlot):
+            return
+        raise TypeError(f"{self.name}[code] only supports += and -= with callables")
+
+    def add(self, code: int, handler: Callable[..., Any]) -> None:
+        if not callable(handler):
+            raise TypeError("handler must be callable")
+        key = int(code)
+        self._handlers.setdefault(key, []).append(handler)
+
+    def add_global(self, handler: Callable[..., Any]) -> None:
+        if not callable(handler):
+            raise TypeError("handler must be callable")
+        self._global_handlers.append(handler)
+
+    def on(self, code_or_handler: Any, handler: Optional[Callable[..., Any]] = None) -> None:
+        if handler is None and callable(code_or_handler):
+            self.add_global(code_or_handler)
+            return
+        if handler is None:
+            raise TypeError("on() requires either on(handler) or on(code, handler)")
+        self.add(int(code_or_handler), handler)
+
+    def remove(self, code: int, handler: Callable[..., Any]) -> None:
+        key = int(code)
+        items = self._handlers.get(key)
+        if not items:
+            return
+        try:
+            items.remove(handler)
+        except ValueError:
+            return
+        if not items:
+            self._handlers.pop(key, None)
+
+    def remove_global(self, handler: Callable[..., Any]) -> None:
+        try:
+            self._global_handlers.remove(handler)
+        except ValueError:
+            return
+
+    def off(self, code_or_handler: Any, handler: Optional[Callable[..., Any]] = None) -> None:
+        if handler is None and callable(code_or_handler):
+            self.remove_global(code_or_handler)
+            return
+        if handler is None:
+            raise TypeError("off() requires either off(handler) or off(code, handler)")
+        self.remove(int(code_or_handler), handler)
+
+    def fire(self, code: int, *args: Any, **kwargs: Any) -> None:
+        for handler in list(self._global_handlers):
+            try:
+                handler(*args, **kwargs)
+            except Exception:
+                pass
+        for handler in list(self._handlers.get(int(code), [])):
+            try:
+                handler(*args, **kwargs)
+            except Exception:
+                pass
+
+
+on_key_down = _EventHook("on_key_down")
+on_key_up = _EventHook("on_key_up")
+on_key_click = _EventHook("on_key_click")
+on_mouse_down = _EventHook("on_mouse_down")
+on_mouse_up = _EventHook("on_mouse_up")
+on_mouse_click = _EventHook("on_mouse_click")
+on_mouse_move = _EventHook("on_mouse_move")
+on_mouse_scroll = _EventHook("on_mouse_scroll")
 
 _mouse = mouse.Controller()
 _keyboard = keyboard.Controller()
@@ -185,10 +257,20 @@ def mouse_move(pos: Any, display_index: Optional[int] = None, relative: bool = F
     if relative:
         cx, cy = _mouse.position
         _mouse.position = (int(cx) + x, int(cy) + y)
+        nx, ny = _mouse.position
+        di = _display_index_for_point(int(nx), int(ny))
+        point = Point(int(nx), int(ny))
+        on_mouse_move.fire(-1, point, di)
+        on_mouse_move.fire(di, point, di)
         return
 
     rect = display_get_rect(display_index)
     _mouse.position = (rect.x + x, rect.y + y)
+    nx, ny = _mouse.position
+    di = _display_index_for_point(int(nx), int(ny))
+    point = Point(int(nx), int(ny))
+    on_mouse_move.fire(-1, point, di)
+    on_mouse_move.fire(di, point, di)
     return
 
 
@@ -201,21 +283,27 @@ def mouse_click(button: int = BUTTON_LEFT, count: int = 1, delay: Optional[float
     btn = _btn(button)
     for _ in range(max(0, count)):
         _mouse.press(btn)
+        on_mouse_down.fire(button, button)
         if delay > 0:
             time.sleep(delay)
         _mouse.release(btn)
+        on_mouse_up.fire(button, button)
+        on_mouse_click.fire(button, button)
 
 
 def mouse_down(button: int = BUTTON_LEFT) -> None:
     _mouse.press(_btn(button))
+    on_mouse_down.fire(button, button)
 
 
 def mouse_up(button: int = BUTTON_LEFT) -> None:
     _mouse.release(_btn(button))
+    on_mouse_up.fire(button, button)
 
 
 def mouse_scroll(vertical: int, horizontal: int = 0) -> None:
     _mouse.scroll(horizontal, vertical)
+    on_mouse_scroll.fire(vertical, vertical=vertical, horizontal=horizontal)
 
 
 def mouse_get_location() -> Tuple[Point, int]:
@@ -275,20 +363,25 @@ def key_click(keys: Union[int, Sequence[int]], count: int = 1, delay: Optional[f
     for _ in range(max(0, count)):
         for key in normalized:
             _keyboard.press(_key(key))
+            on_key_down.fire(key, key)
         if delay > 0:
             time.sleep(delay)
         for key in normalized:
             _keyboard.release(_key(key))
+            on_key_up.fire(key, key)
+            on_key_click.fire(key, key)
 
 
 def key_down(keys: Union[int, Sequence[int]]) -> None:
     for key in _normalize_keys(keys):
         _keyboard.press(_key(key))
+        on_key_down.fire(key, key)
 
 
 def key_up(keys: Union[int, Sequence[int]]) -> None:
     for key in _normalize_keys(keys):
         _keyboard.release(_key(key))
+        on_key_up.fire(key, key)
 
 
 def wait_for(keys_or_buttons: Union[int, Sequence[int]], delay: float = 0.01, timeout: float = -1) -> Optional[int]:
@@ -307,11 +400,11 @@ def wait_for(keys_or_buttons: Union[int, Sequence[int]], delay: float = 0.01, ti
 
     pressed: dict[str, Optional[int]] = {"code": None}
 
-    def on_press_key(key: Any) -> Optional[bool]:
+    def on_press_key(key: Any) -> Any:
         vk = _key_vk(key)
         if vk in wanted:
             pressed["code"] = int(vk)
-            return False
+            on_key_down.fire(int(vk), int(vk))
         return None
 
     def on_click(x, y, button, pressed_state):
@@ -325,7 +418,7 @@ def wait_for(keys_or_buttons: Union[int, Sequence[int]], delay: float = 0.01, ti
         for code, btn in btn_map.items():
             if btn == button and code in wanted:
                 pressed["code"] = code
-                return False
+                on_mouse_down.fire(code, code)
         return None
 
     key_listener = keyboard.Listener(on_press=on_press_key)
@@ -355,7 +448,6 @@ def check_for(keys_or_buttons: Union[int, Sequence[int]]) -> Optional[int]:
         wanted = [int(k) for k in keys_or_buttons]
     # Check keyboard
     try:
-        import ctypes
         user32 = ctypes.windll.user32
         for code in wanted:
             # Keyboard: 0x01..0xFE
@@ -485,7 +577,7 @@ def record(
         events.append({"type": "step", "image": image_ref, "x": int(mx), "y": int(my), "time": now()})
         step_index["value"] += 1
 
-    def on_press(key: Any) -> Optional[bool]:
+    def on_press(key: Any) -> Any:
         vk = getattr(key, "vk", None)
         if vk is None and hasattr(key, "value") and hasattr(key.value, "vk"):
             vk = key.value.vk
@@ -498,7 +590,7 @@ def record(
             return False
         return None
 
-    def on_release(key: Any) -> Optional[bool]:
+    def on_release(key: Any) -> Any:
         vk = getattr(key, "vk", None)
         if vk is None and hasattr(key, "value") and hasattr(key.value, "vk"):
             vk = key.value.vk
@@ -546,8 +638,6 @@ def _to_gray(arr: np.ndarray) -> np.ndarray:
 
 
 def _find_step_center_on_any_display(template_arr: np.ndarray, threshold: float = 0.8) -> Optional[Tuple[int, int]]:
-    from .capture import DISPLAY_COUNT, capture, display_get_rect
-
     template_gray = _to_gray(template_arr)
     th, tw = template_gray.shape[:2]
     best_score = -1.0

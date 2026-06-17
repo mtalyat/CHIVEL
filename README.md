@@ -349,6 +349,51 @@ else:
 	print("None pressed")
 ```
 
+### Input Event Hooks
+
+Subscribe to input events by key/button code.
+
+```python
+def on_e_down(code):
+	print("E down", code)
+
+def on_left_click(code):
+	print("Left click", code)
+
+# Subscribe
+cv.on_key_down[cv.KEY_E] += on_e_down
+cv.on_mouse_click[cv.BUTTON_LEFT] += on_left_click
+
+# Trigger by using normal input APIs
+cv.key_down(cv.KEY_E)
+cv.mouse_click(cv.BUTTON_LEFT)
+
+# Unsubscribe
+cv.on_key_down[cv.KEY_E] -= on_e_down
+cv.on_mouse_click[cv.BUTTON_LEFT] -= on_left_click
+```
+
+For mouse move, you can subscribe globally without a key/index:
+
+```python
+def on_any_move(pt, display_index):
+	print("move", pt.x, pt.y, display_index)
+
+cv.on_mouse_move += on_any_move
+cv.mouse_move((100, 100))
+cv.on_mouse_move -= on_any_move
+```
+
+You can also use explicit methods:
+
+```python
+cv.on_key_down.on(cv.KEY_E, on_e_down)
+cv.on_key_down.off(cv.KEY_E, on_e_down)
+
+cv.on_mouse_move.on(on_any_move)
+cv.on_mouse_move.off(on_any_move)
+```
+
 ### pause(prompt="Press Enter to continue...")
 
 Blocks execution until Enter is pressed in the terminal.
