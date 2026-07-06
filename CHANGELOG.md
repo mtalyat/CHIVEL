@@ -1,5 +1,8 @@
 # Change log
 
+## 0.8.1
+- Add input for key and mouse inputs.
+
 ## 0.8.0
 - Add missing keys.
 - Fix syntax errors.
