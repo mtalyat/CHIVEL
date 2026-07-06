@@ -409,7 +409,9 @@ cv.pause("Press Enter when setup is complete...")
 
 Records input events and returns Recording.
 
-- output_dir is a folder. If provided, recording.json and step images are saved there.
+- output_dir is treated as a file path.
+- The output is a runnable Python file that imports `chivel as cv` and executes recorded actions.
+- Step images are saved next to that file.
 - simplify uses SIMPLIFY_* bit flags.
 - simplify_threshold caps max gap between events.
 - step_key enables step mode (captures step images, suppresses move events).
@@ -447,39 +449,34 @@ How simplify_threshold works:
 
 ```python
 # Normal recording
-rec = cv.record(output_dir="out_record", stop_key=cv.KEY_ESCAPE)
+rec = cv.record(output_dir="out_record.py", stop_key=cv.KEY_ESCAPE)
 
 # Step recording (F8)
 rec2 = cv.record(
-	output_dir="out_step_record",
+	output_dir="out_step_record.py",
 	step_key=cv.KEY_F8,
 	step_size=(80, 80),
 	simplify=cv.SIMPLIFY_ALL,
 	simplify_threshold=0.5,
 )
+
+# Explicit file output
+rec3 = cv.record(output_dir="my_recording.py", stop_key=cv.KEY_ESCAPE)
 ```
 
 ### play(recording, speed=1.0)
 
-Replays Recording, path, or dict payload.
+Runs a recorded Python file.
 
 ```python
-cv.play(rec)
-cv.play("out_record", speed=1.5)
+cv.play("out_record.py", speed=1.5)
+cv.play("my_recording.py", speed=1.5)
 ```
 
-### Recording.save(output_dir)
+### Recording.save(output_path)
 
 ```python
-rec.save("session1")
-```
-
-### Recording.load(input_path)
-
-Loads from directory or explicit recording.json path.
-
-```python
-loaded = cv.Recording.load("session1")
+rec.save("session1.py")
 ```
 
 ## Image Class Method Examples

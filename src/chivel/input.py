@@ -4,7 +4,7 @@ from __future__ import annotations
 
 # Standard library imports
 import ctypes
-import json
+import runpy
 import sys
 import time
 from dataclasses import dataclass, field
@@ -19,7 +19,7 @@ from mss import mss
 from pynput import keyboard, mouse
 
 # Internal imports
-from .capture import DISPLAY_COUNT, capture, display_get_rect
+from .capture import display_get_rect
 from .constants import (
     BUTTON_LEFT,
     BUTTON_MIDDLE,
@@ -168,41 +168,100 @@ class Recording:
     recorded_at: float = 0.0
     stop_key: int = KEY_ESCAPE
     events: List[Dict[str, Any]] = field(default_factory=list)
-    # Set on load; not serialised. Used to resolve relative step image paths.
-    source_path: Optional[str] = field(default=None, compare=False, repr=False)
 
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "version": self.version,
-            "recorded_at": self.recorded_at,
-            "stop_key": self.stop_key,
-            "events": self.events,
+    @staticmethod
+    def _button_expr(value: Any) -> str:
+        mapping = {
+            "Button.left": "cv.BUTTON_LEFT",
+            "Button.right": "cv.BUTTON_RIGHT",
+            "Button.middle": "cv.BUTTON_MIDDLE",
         }
+        return mapping.get(str(value), "cv.BUTTON_LEFT")
 
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "Recording":
-        return cls(
-            version=int(data.get("version", 1)),
-            recorded_at=float(data.get("recorded_at", 0.0)),
-            stop_key=int(data.get("stop_key", KEY_ESCAPE)),
-            events=list(data.get("events", [])),
+    @staticmethod
+    def _event_to_python(event: Dict[str, Any], base_time: float) -> List[str]:
+        lines: List[str] = []
+        delta = max(0.0, float(event.get("time", base_time)) - float(base_time))
+        lines.append(f"    cv.wait({delta:.6f} / speed)")
+
+        kind = event.get("type")
+        if kind == "mouse_move":
+            lines.append(f"    cv.mouse_move(({int(event.get('x', 0))}, {int(event.get('y', 0))}))")
+        elif kind == "mouse_down":
+            lines.append(f"    cv.mouse_down({Recording._button_expr(event.get('button'))})")
+        elif kind == "mouse_up":
+            lines.append(f"    cv.mouse_up({Recording._button_expr(event.get('button'))})")
+        elif kind == "mouse_scroll":
+            lines.append(
+                f"    cv.mouse_scroll(vertical={int(event.get('dy', 0))}, horizontal={int(event.get('dx', 0))})"
+            )
+        elif kind == "key_down":
+            vk = event.get("vk")
+            if vk is not None:
+                lines.append(f"    cv.key_down({int(vk)})")
+        elif kind == "key_up":
+            vk = event.get("vk")
+            if vk is not None:
+                lines.append(f"    cv.key_up({int(vk)})")
+        elif kind == "step":
+            image = str(event.get("image", ""))
+            lines.append(f"    _move_to_step({image!r})")
+
+        return lines
+
+    def to_python_script(self) -> str:
+        lines: List[str] = [
+            "from __future__ import annotations",
+            "",
+            "from pathlib import Path",
+            "",
+            "import chivel as cv",
+            "",
+            "",
+            "def _move_to_step(image_name: str, threshold: float = 0.8) -> bool:",
+            "    template_path = Path(__file__).parent / image_name",
+            "    template = cv.load(str(template_path))",
+            "    for display_index in range(cv.DISPLAY_COUNT):",
+            "        source = cv.capture(display_index=display_index)",
+            "        hits = cv.find_image(source, template, threshold=threshold)",
+            "        if hits:",
+            "            center = hits[0].rect.center()",
+            "            cv.mouse_move((center.x, center.y), display_index=display_index)",
+            "            return True",
+            "    return False",
+            "",
+            "",
+            "def run(speed: float = 1.0) -> None:",
+            "    speed = max(float(speed), 1e-6)",
+        ]
+
+        if not self.events:
+            lines.append("    return")
+        else:
+            base_time = float(self.events[0].get("time", 0.0))
+            prev_time = base_time
+            for event in self.events:
+                evt_time = float(event.get("time", prev_time))
+                event_with_delta = dict(event)
+                event_with_delta["time"] = evt_time
+                lines.extend(self._event_to_python(event_with_delta, prev_time))
+                prev_time = evt_time
+
+        lines.extend(
+            [
+                "",
+                "",
+                "if __name__ == \"__main__\":",
+                "    run()",
+                "",
+            ]
         )
+        return "\n".join(lines)
 
-    def save(self, output_dir: str) -> None:
-        path = Path(output_dir)
-        path.mkdir(parents=True, exist_ok=True)
-        json_path = path / "recording.json"
-        json_path.write_text(json.dumps(self.to_dict(), indent=2), encoding="utf-8")
-
-    @classmethod
-    def load(cls, input_path: str) -> "Recording":
-        path = Path(input_path)
-        if path.is_dir():
-            path = path / "recording.json"
-        data = json.loads(path.read_text(encoding="utf-8"))
-        recording = cls.from_dict(data)
-        recording.source_path = str(path.resolve())
-        return recording
+    def save(self, output_path: str) -> None:
+        script_path = Path(output_path)
+        script_path.parent.mkdir(parents=True, exist_ok=True)
+        script_path.write_text(self.to_python_script(), encoding="utf-8")
 
 
 def _btn(value: int) -> mouse.Button:
@@ -533,7 +592,7 @@ def record(
     if step_key is not None:
         if output_dir is None:
             raise ValueError("output_dir must be provided when step_key is set")
-        _step_dir = Path(output_dir)
+        _step_dir = Path(output_dir).parent
         _step_dir.mkdir(parents=True, exist_ok=True)
 
     def now() -> float:
@@ -572,7 +631,7 @@ def record(
         with mss() as sct:
             shot = sct.grab(region)
         cv2.imwrite(str(full_path), np.array(shot))
-        # Image lives in the same directory as recording.json — store filename only.
+        # Image lives next to the generated recording.py script; store filename only.
         image_ref = filename
         events.append({"type": "step", "image": image_ref, "x": int(mx), "y": int(my), "time": now()})
         step_index["value"] += 1
@@ -620,120 +679,16 @@ def record(
     return recording
 
 
-def _btn_from_str(value: str) -> mouse.Button:
-    mapping = {
-        "Button.left": mouse.Button.left,
-        "Button.right": mouse.Button.right,
-        "Button.middle": mouse.Button.middle,
-    }
-    return mapping.get(value, mouse.Button.left)
-
-
-def _to_gray(arr: np.ndarray) -> np.ndarray:
-    if len(arr.shape) == 2:
-        return arr
-    if arr.shape[2] == 4:
-        return cv2.cvtColor(arr, cv2.COLOR_BGRA2GRAY)
-    return cv2.cvtColor(arr, cv2.COLOR_BGR2GRAY)
-
-
-def _find_step_center_on_any_display(template_arr: np.ndarray, threshold: float = 0.8) -> Optional[Tuple[int, int]]:
-    template_gray = _to_gray(template_arr)
-    th, tw = template_gray.shape[:2]
-    best_score = -1.0
-    best_center: Optional[Tuple[int, int]] = None
-
-    for display_index in range(DISPLAY_COUNT):
-        shot = capture(display_index=display_index).array
-        source_gray = _to_gray(shot)
-        sh, sw = source_gray.shape[:2]
-        if sh < th or sw < tw:
-            continue
-
-        result = cv2.matchTemplate(source_gray, template_gray, cv2.TM_CCOEFF_NORMED)
-        _, max_val, _, max_loc = cv2.minMaxLoc(result)
-        if max_val > best_score:
-            rect = display_get_rect(display_index)
-            cx = rect.x + int(max_loc[0]) + tw // 2
-            cy = rect.y + int(max_loc[1]) + th // 2
-            best_center = (cx, cy)
-            best_score = float(max_val)
-
-    if best_center is not None and best_score >= threshold:
-        return best_center
-    return None
-
-
 def play(recording: Any, speed: float = 1.0) -> None:
-    source_path: Optional[str] = None
-    if isinstance(recording, Recording):
-        events = recording.events
-        source_path = recording.source_path
-    elif isinstance(recording, (str, Path)):
-        loaded = Recording.load(str(recording))
-        events = loaded.events
-        source_path = loaded.source_path
-    elif isinstance(recording, dict):
-        events = Recording.from_dict(recording).events
-    else:
-        raise ValueError("recording must be a Recording, file path, or dict")
+    if not isinstance(recording, (str, Path)):
+        raise ValueError("recording must be a Python file path")
 
-    if not events:
-        return
+    path = Path(recording)
+    if not path.is_file():
+        raise ValueError("recording must be a Python file path")
 
-    has_step_events = any(evt.get("type") == "step" for evt in events)
-    step_ready = not has_step_events
-
-    base_time = events[0]["time"]
-    play_start = time.time()
-
-    for evt in events:
-        target = play_start + (evt["time"] - base_time) / max(speed, 1e-6)
-        delay = target - time.time()
-        if delay > 0:
-            time.sleep(delay)
-
-        kind = evt["type"]
-        if kind == "mouse_move":
-            if not has_step_events:
-                _mouse.position = (evt["x"], evt["y"])
-        elif kind == "mouse_down":
-            if has_step_events and not step_ready:
-                continue
-            if not has_step_events:
-                _mouse.position = (evt["x"], evt["y"])
-            _mouse.press(_btn_from_str(evt.get("button", "Button.left")))
-        elif kind == "mouse_up":
-            if has_step_events and not step_ready:
-                continue
-            if not has_step_events:
-                _mouse.position = (evt["x"], evt["y"])
-            _mouse.release(_btn_from_str(evt.get("button", "Button.left")))
-        elif kind == "mouse_scroll":
-            if has_step_events and not step_ready:
-                continue
-            if not has_step_events:
-                _mouse.position = (evt["x"], evt["y"])
-            _mouse.scroll(evt.get("dx", 0), evt.get("dy", 0))
-        elif kind == "key_down":
-            vk = evt.get("vk")
-            if vk is not None:
-                _keyboard.press(keyboard.KeyCode.from_vk(vk))
-        elif kind == "key_up":
-            vk = evt.get("vk")
-            if vk is not None:
-                _keyboard.release(keyboard.KeyCode.from_vk(vk))
-        elif kind == "step":
-            image_ref = evt.get("image", "")
-            if image_ref:
-                img_path = Path(image_ref)
-                if not img_path.is_absolute() and source_path is not None:
-                    img_path = Path(source_path).parent / img_path
-                template_arr = cv2.imread(str(img_path))
-                if template_arr is not None:
-                    center = _find_step_center_on_any_display(template_arr, threshold=0.8)
-                    if center is not None:
-                        _mouse.position = center
-                        step_ready = True
-                    else:
-                        step_ready = False
+    script_globals = runpy.run_path(str(path), run_name="__chivel_recording__")
+    run_fn = script_globals.get("run")
+    if not callable(run_fn):
+        raise ValueError("recording file must define run(speed: float = 1.0)")
+    run_fn(max(float(speed), 1e-6))

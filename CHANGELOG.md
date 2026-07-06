@@ -1,5 +1,8 @@
 # Change log
 
+## 0.8.2
+- Rework recording system. Recording now outputs a Python script.
+
 ## 0.8.1
 - Add input for key and mouse inputs.
 

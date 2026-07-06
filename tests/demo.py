@@ -83,17 +83,17 @@ def demo_ocr() -> None:
 
 
 def demo_record() -> None:
-    out = Path("out_record")
+    out = Path("out_record.py")
     print("Recording mouse and keyboard events.")
     print("Press ESC to stop and save.")
     recording = cv.record(
+        output_dir=str(out),
         # simplify=cv.SIMPLIFY_MOVE | cv.SIMPLIFY_MOUSE | cv.SIMPLIFY_KEY | cv.SIMPLIFY_TIME
         simplify=0,
     )
-    recording.save(str(out))
 
     events = recording.events
-    print(f"Recorded {len(events)} events -> {(out / 'recording.json').resolve()}")
+    print(f"Recorded {len(events)} events -> {out.resolve()}")
 
     counts: dict = {}
     for e in events:
@@ -103,9 +103,9 @@ def demo_record() -> None:
 
 
 def demo_play(allow_input: bool) -> None:
-    recording_dir = Path("out_record")
-    if not recording_dir.exists():
-        print(f"No recording found at {recording_dir.resolve()}")
+    recording_path = Path("out_record.py")
+    if not recording_path.exists():
+        print(f"No recording found at {recording_path.resolve()}")
         print("Run 'python test.py record' first.")
         return
 
@@ -113,12 +113,10 @@ def demo_play(allow_input: bool) -> None:
         print("Refusing to replay input events. Re-run with --allow-input to enable.")
         return
 
-    loaded = cv.Recording.load(str(recording_dir))
-    n = len(loaded.events)
-    print(f"Replaying {n} events from {recording_dir.resolve()}")
+    print(f"Replaying from {recording_path.resolve()}")
     print("Move focus to target window now. Starting in 3 seconds...")
     cv.wait(3.0)
-    cv.play(loaded)
+    cv.play(str(recording_path))
     print("Playback complete.")
 
 
@@ -139,7 +137,7 @@ def demo_input(allow_input: bool) -> None:
 
 
 def demo_step_record() -> None:
-    out = Path("out_step_record")
+    out = Path("out_step_record.py")
     # F8 (VK 0x77) is the step key — press it to snapshot where the mouse is.
     # Mouse movement is suppressed between steps; only clicks/scrolls carry through.
     step_key = 0x77
@@ -155,15 +153,15 @@ def demo_step_record() -> None:
 
     steps = [e for e in recording.events if e["type"] == "step"]
     others = [e for e in recording.events if e["type"] != "step"]
-    print(f"Saved {len(steps)} step(s) and {len(others)} other event(s) -> {(out / 'recording.json').resolve()}")
+    print(f"Saved {len(steps)} step(s) and {len(others)} other event(s) -> {out.resolve()}")
     for i, s in enumerate(steps):
         print(f"  step {i}: {s['image']}  @ ({s['x']}, {s['y']})");
 
 
 def demo_step_play(allow_input: bool) -> None:
-    recording_dir = Path("out_step_record")
-    if not recording_dir.exists():
-        print(f"No step recording found at {recording_dir.resolve()}")
+    recording_path = Path("out_step_record.py")
+    if not recording_path.exists():
+        print(f"No step recording found at {recording_path.resolve()}")
         print("Run 'python test.py step-record' first.")
         return
 
@@ -171,12 +169,10 @@ def demo_step_play(allow_input: bool) -> None:
         print("Refusing to replay input events. Re-run with --allow-input to enable.")
         return
 
-    loaded = cv.Recording.load(str(recording_dir))
-    steps = [e for e in loaded.events if e["type"] == "step"]
-    print(f"Replaying {len(steps)} step(s) from {recording_dir.resolve()}")
+    print(f"Replaying step recording from {recording_path.resolve()}")
     print("Starting in 3 seconds...")
     cv.wait(3.0)
-    cv.play(loaded)
+    cv.play(str(recording_path))
     print("Step playback complete.")
 
 
