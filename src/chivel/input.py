@@ -24,7 +24,9 @@ from .constants import (
     BUTTON_LEFT,
     BUTTON_MIDDLE,
     BUTTON_RIGHT,
+    KEY_A,
     KEY_ALT,
+    KEY_C,
     KEY_CTRL,
     KEY_ENTER,
     KEY_ESCAPE,
@@ -32,6 +34,10 @@ from .constants import (
     KEY_SHIFT,
     KEY_SPACE,
     KEY_TAB,
+    KEY_V,
+    KEY_X,
+    KEY_Y,
+    KEY_Z,
     SIMPLIFY_KEY,
     SIMPLIFY_MOUSE,
     SIMPLIFY_MOVE,
@@ -365,10 +371,18 @@ def mouse_scroll(vertical: int, horizontal: int = 0) -> None:
     on_mouse_scroll.fire(vertical, vertical=vertical, horizontal=horizontal)
 
 
-def mouse_get_location() -> Tuple[Point, int]:
+def mouse_get_location(global_coords: bool = False) -> Tuple[Point, int]:
     x, y = _mouse.position
     display_index = _display_index_for_point(int(x), int(y))
-    return Point(int(x), int(y)), display_index
+    if global_coords or display_index < 0:
+        return Point(int(x), int(y)), display_index
+
+    rect = display_get_rect(display_index)
+    return Point(int(x) - rect.x, int(y) - rect.y), display_index
+
+
+def mouse_get_location_global() -> Tuple[Point, int]:
+    return mouse_get_location(global_coords=True)
 
 
 def mouse_get_display() -> int:
@@ -429,6 +443,36 @@ def key_click(keys: Union[int, Sequence[int]], count: int = 1, delay: Optional[f
             _keyboard.release(_key(key))
             on_key_up.fire(key, key)
             on_key_click.fire(key, key)
+
+
+def copy() -> None:
+    """Trigger the standard copy shortcut."""
+    key_click([KEY_CTRL, KEY_C])
+
+
+def cut() -> None:
+    """Trigger the standard cut shortcut."""
+    key_click([KEY_CTRL, KEY_X])
+
+
+def paste() -> None:
+    """Trigger the standard paste shortcut."""
+    key_click([KEY_CTRL, KEY_V])
+
+
+def select_all() -> None:
+    """Trigger the standard select-all shortcut."""
+    key_click([KEY_CTRL, KEY_A])
+
+
+def undo() -> None:
+    """Trigger the standard undo shortcut."""
+    key_click([KEY_CTRL, KEY_Z])
+
+
+def redo() -> None:
+    """Trigger the standard redo shortcut."""
+    key_click([KEY_CTRL, KEY_Y])
 
 
 def key_down(keys: Union[int, Sequence[int]]) -> None:

@@ -248,13 +248,17 @@ cv.mouse_scroll(1, 0)
 cv.mouse_scroll(0, -1)
 ```
 
-### mouse_get_location()
+### mouse_get_location(global_coords=False)
 
-Returns (Point, display_index).
+Returns (Point, display_index). By default it is in display-local coordinates.
+Set `global_coords=True` to get raw desktop/global coordinates instead.
 
 ```python
 pt, display_idx = cv.mouse_get_location()
-print(pt.x, pt.y, display_idx)
+print(pt.x, pt.y, display_idx)  # local to the current display
+
+pt, display_idx = cv.mouse_get_location(global_coords=True)
+print(pt.x, pt.y, display_idx)  # absolute screen coordinates
 ```
 
 ### mouse_get_display()
