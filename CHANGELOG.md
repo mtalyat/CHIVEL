@@ -1,5 +1,10 @@
 # Change log
 
+## 0.8.5
+- Add a global abort failsafe with `set_abort_key()` / `clear_abort_key()`.
+- Default abort combo is Escape, with support for disabling it via `None`.
+- Improve abort checks in blocking waits and polling loops.
+
 ## 0.8.2
 - Rework recording system. Recording now outputs a Python script.
 

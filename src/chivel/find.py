@@ -9,6 +9,7 @@ import numpy as np
 
 from .capture import capture
 from .core import Image, Match, Rect
+from .input import _check_abort_key
 
 _ocr_engine = None
 TextSearch = Union[str, Pattern[str]]
@@ -113,7 +114,9 @@ def find_all(
 
 
 def wait(seconds: float) -> None:
+    _check_abort_key()
     time.sleep(seconds)
+    _check_abort_key()
 
 
 def expect_any(
@@ -125,6 +128,7 @@ def expect_any(
 ) -> List[Match]:
     start = time.time()
     while True:
+        _check_abort_key()
         source = capture(display_index=display_index)
         matches = find_any(source, list(search), threshold=threshold)
         if matches:
@@ -133,6 +137,7 @@ def expect_any(
         if timeout >= 0 and (time.time() - start) >= timeout:
             return []
         time.sleep(interval)
+        _check_abort_key()
 
 
 def expect_all(
@@ -144,6 +149,7 @@ def expect_all(
 ) -> List[Match]:
     start = time.time()
     while True:
+        _check_abort_key()
         source = capture(display_index=display_index)
         matches = find_all(source, list(search), threshold=threshold)
         if matches:
@@ -152,3 +158,4 @@ def expect_all(
         if timeout >= 0 and (time.time() - start) >= timeout:
             return []
         time.sleep(interval)
+        _check_abort_key()

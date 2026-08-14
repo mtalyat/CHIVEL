@@ -37,6 +37,9 @@ from .input import (
     type,
     get_clipboard,
     set_clipboard,
+    set_abort_key,
+    clear_abort_key,
+    get_abort_key,
 )
 from .io import load, save, show
 
@@ -95,4 +98,7 @@ __all__ = [
     "DISPLAY_COUNT",
     "get_clipboard",
     "set_clipboard",
+    "set_abort_key",
+    "clear_abort_key",
+    "get_abort_key",
 ]

@@ -166,6 +166,34 @@ on_mouse_scroll = _EventHook("on_mouse_scroll")
 
 _mouse = mouse.Controller()
 _keyboard = keyboard.Controller()
+_ABORT_KEY: Optional[List[int]] = [KEY_ESCAPE]
+
+
+def get_abort_key() -> Optional[List[int]]:
+    """Get the current global abort combo, or None when disabled."""
+    return None if _ABORT_KEY is None else list(_ABORT_KEY)
+
+
+def set_abort_key(keys: Optional[Union[int, Sequence[int]]] = KEY_ESCAPE) -> None:
+    """Set a global abort combo. When all keys in the combo are held, SystemExit is raised."""
+    global _ABORT_KEY
+    if keys is None:
+        _ABORT_KEY = None
+        return
+    _ABORT_KEY = _normalize_keys(keys)
+
+
+def clear_abort_key() -> None:
+    """Disable the global abort combo."""
+    global _ABORT_KEY
+    _ABORT_KEY = None
+
+
+def _check_abort_key() -> None:
+    if _ABORT_KEY is None:
+        return
+    if all(check_for(key) is not None for key in _ABORT_KEY):
+        raise SystemExit("Abort key pressed")
 
 
 @dataclass
@@ -408,12 +436,15 @@ def type(text: str, delay: float = 0.01) -> None:
     Types text character by character, with a delay between each character.
     """
     for ch in text:
+        _check_abort_key()
         _keyboard.type(ch)
         if delay > 0:
             time.sleep(delay)
+            _check_abort_key()
 
 
 def pause(prompt: str = "Press Enter to continue...") -> None:
+    _check_abort_key()
     input(prompt)
 
 
@@ -434,11 +465,13 @@ def key_click(keys: Union[int, Sequence[int]], count: int = 1, delay: Optional[f
     if delay is None:
         delay = 0.0 if len(normalized) <= 1 else 0.1
     for _ in range(max(0, count)):
+        _check_abort_key()
         for key in normalized:
             _keyboard.press(_key(key))
             on_key_down.fire(key, key)
         if delay > 0:
             time.sleep(delay)
+            _check_abort_key()
         for key in normalized:
             _keyboard.release(_key(key))
             on_key_up.fire(key, key)
@@ -477,12 +510,14 @@ def redo() -> None:
 
 def key_down(keys: Union[int, Sequence[int]]) -> None:
     for key in _normalize_keys(keys):
+        _check_abort_key()
         _keyboard.press(_key(key))
         on_key_down.fire(key, key)
 
 
 def key_up(keys: Union[int, Sequence[int]]) -> None:
     for key in _normalize_keys(keys):
+        _check_abort_key()
         _keyboard.release(_key(key))
         on_key_up.fire(key, key)
 
@@ -530,11 +565,13 @@ def wait_for(keys_or_buttons: Union[int, Sequence[int]], delay: float = 0.01, ti
     mouse_listener.start()
     start_time = time.time()
     while pressed["code"] is None:
+        _check_abort_key()
         if timeout > 0 and (time.time() - start_time) >= timeout:
             key_listener.stop()
             mouse_listener.stop()
             return None
         time.sleep(delay)
+        _check_abort_key()
     key_listener.stop()
     mouse_listener.stop()
     return pressed["code"]

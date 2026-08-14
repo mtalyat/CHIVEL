@@ -18,7 +18,7 @@ It is designed for practical desktop automation and test scripting.
 ## Install
 
 ```bash
-pip install chivel
+pip install chivel==0.8.5
 ```
 
 ## Quick Start
