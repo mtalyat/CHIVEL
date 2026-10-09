@@ -43,7 +43,7 @@ from .constants import (
     SIMPLIFY_MOVE,
     SIMPLIFY_TIME,
 )
-from .core import Point, Rect
+from .core import Match, Point, Rect
 
 def get_clipboard() -> str:
     """Get the current text from the clipboard."""
@@ -339,9 +339,12 @@ def _to_xy(pos: Any) -> Tuple[int, int]:
     if isinstance(pos, Rect):
         center = pos.center()
         return int(center.x), int(center.y)
+    if isinstance(pos, Match):
+        center = pos.rect.center()
+        return int(center.x), int(center.y)
     if isinstance(pos, (tuple, list)) and len(pos) >= 2:
         return int(pos[0]), int(pos[1])
-    raise ValueError("pos must be Point, Rect, or tuple/list(x, y)")
+    raise ValueError("pos must be Point, Rect, Match, or tuple/list(x, y)")
 
 
 def mouse_move(pos: Any, display_index: Optional[int] = None, relative: bool = False) -> None:

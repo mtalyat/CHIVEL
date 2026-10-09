@@ -18,7 +18,7 @@ It is designed for practical desktop automation and test scripting.
 ## Install
 
 ```bash
-pip install chivel==0.8.5
+pip install chivel==0.9.0
 ```
 
 ## Quick Start
@@ -43,6 +43,164 @@ if hits:
 - Match(rect, label=None)
 - Image(width, height, channels=3)
 - Recording(version, recorded_at, stop_key, events)
+- ScreenElement(display_index=None, search_rect=None)
+- TextElement(search, threshold=0.0, display_index=None, search_rect=None)
+- ImageElement(image, threshold=0.8, display_index=None, search_rect=None)
+- RegionElement(rect, display_index=None)
+- ShapeTemplate(name, contour)
+- ShapeElement(shape, threshold=0.2, min_area=100.0, max_results=0, display_index=None, search_rect=None)
+- ScreenOverlay(display_index=None, click_through=True)
+
+## Screen Elements APIs
+
+Screen elements are object wrappers for things on screen. They combine searching and interaction so you can find once and act directly.
+
+### TextElement(search, threshold=0.0, display_index=None, search_rect=None)
+
+```python
+title = cv.TextElement("Settings")
+
+if title.exists(timeout=2.0):
+	title.click()
+```
+
+### ImageElement(image, threshold=0.8, display_index=None, search_rect=None)
+
+```python
+button = cv.ImageElement(cv.load("save_button.png"), threshold=0.9)
+button.expect(timeout=5.0)
+button.click(count=2)
+```
+
+### RegionElement(rect, display_index=None)
+
+Represents a fixed area on a display and supports direct actions by region center.
+
+```python
+canvas = cv.RegionElement(cv.Rect(100, 120, 500, 300), display_index=0)
+canvas.click()
+
+shot = canvas.capture()
+cv.save(shot, "canvas.png")
+```
+
+### Common Element Methods
+
+- `find()` -> first `Match` or `None`
+- `find_all()` -> all matches
+- `expect(interval=0.2, timeout=-1.0)` -> `bool`
+- `require(interval=0.2, timeout=-1.0)` -> first `Match`, raises if missing
+- `exists(timeout=0.0, interval=0.2)` -> `bool`
+- `center()` -> element center `Point` or `None`
+- `move()` -> `bool` (moves when found)
+- `click(button=..., count=..., delay=...)` -> `bool`
+- `drag_to(target, button=..., hold=0.0)` -> `bool`
+
+### find_element(search, ...)
+
+One-off helper for a quick lookup without explicitly creating an element instance.
+
+```python
+hit = cv.find_element("File")
+if hit:
+	print(hit.rect)
+```
+
+## Shape Detection APIs
+
+Find geometric shapes by form (size-independent): built-ins like rectangle/circle/x/star, or custom templates.
+
+### Built-in shape search
+
+```python
+screen = cv.capture()
+
+rects = cv.find_shape(screen, "rectangle", threshold=0.2)
+circles = cv.find_shape(screen, "circle", threshold=0.2)
+close_icons = cv.find_shape(screen, "x", threshold=0.2)
+stars = cv.find_shape(screen, "star", threshold=0.25)
+```
+
+### Custom shape templates
+
+Create a custom shape from normalized points (any coordinate range is fine; CHIVEL normalizes internally).
+
+```python
+custom_l = cv.shape_template(
+	"custom-l",
+	[
+		(0.0, 0.0),
+		(0.25, 0.0),
+		(0.25, 0.75),
+		(1.0, 0.75),
+		(1.0, 1.0),
+		(0.0, 1.0),
+	],
+)
+
+hits = cv.find_shape(screen, custom_l, threshold=0.22, min_area=120)
+```
+
+### ShapeElement integration
+
+Use shapes with the same element workflow (`find`, `expect`, `move`, `click`, `drag_to`).
+
+```python
+close_button = cv.ShapeElement("x", threshold=0.2)
+if close_button.exists(timeout=1.0):
+	close_button.click()
+```
+
+### Shape API summary
+
+- `shape_template(name, points, close=True)`
+- `get_shape_template(shape)`
+- `find_shape(source, shape, threshold=0.2, min_area=100.0, max_results=0)`
+- `find_shapes(source, shapes, threshold=0.2, min_area=100.0, max_results_per_shape=3)`
+
+## Screen Overlay APIs
+
+Draw real-time visual guides directly on top of the desktop. Overlays are transparent and click-through, so mouse/keyboard input still goes to the apps under them.
+
+### overlay(display_index=None, click_through=True)
+
+Factory that returns a `ScreenOverlay`.
+
+```python
+ov = cv.overlay(display_index=0)
+```
+
+### ScreenOverlay drawing methods
+
+- `clear()`
+- `draw_rect(rect, color=None, thickness=2, label=None)`
+- `draw_match(match, color=None, thickness=2)`
+- `draw_matches(matches, color=None, thickness=2)`
+- `draw_line(start, end, color=None, thickness=2)`
+- `draw_text(text, pos, color=None, size=16)`
+- `draw_ellipse(center, radius, color=None, thickness=2)`
+- `draw_crosshair(pos, size=20, color=None, thickness=2)`
+- `present()`
+- `run(updater=None, fps=60.0, duration=-1.0)`
+- `close()`
+
+### Real-time overlay example
+
+```python
+import chivel as cv
+
+with cv.overlay(display_index=0) as ov:
+	def update(overlay, frame, elapsed):
+		overlay.clear()
+		t = "CHIVEL overlay"
+		overlay.draw_text(t, (20, 20), color=cv.Color(0, 255, 255), size=18)
+		overlay.draw_rect(cv.Rect(120, 120, 260, 140), color=cv.Color(255, 120, 0), thickness=3)
+		pt = overlay.mouse_point_local()
+		if pt is not None:
+			overlay.draw_crosshair((pt.x, pt.y), size=16, color=cv.Color(0, 255, 0), thickness=2)
+
+	ov.run(updater=update, fps=60.0, duration=8.0)
+```
 
 ## Display and Capture APIs
 
@@ -165,6 +323,20 @@ All search terms must match; returns combined matches or empty list.
 hits = cv.find_all(screen, ["Username", "Password"])
 ```
 
+### find_display(search, threshold=0.8, display_indices=None)
+
+Searches each display and returns the display index where the text/image is found, or `-1` if not found.
+
+- `search` can be plain text, regex, or an `Image`
+- by default, search starts on the primary display, then scans the rest
+- `display_indices` can restrict or reorder which displays are checked
+
+```python
+idx = cv.find_display("Settings")
+if idx >= 0:
+	print("Found on display", idx)
+```
+
 ### expect_any(*search, interval=1.0, timeout=-1.0, display_index=0, threshold=0.8)
 
 Polling wait until any search term matches, or timeout.
@@ -179,6 +351,17 @@ Polling wait until all search terms match, or timeout.
 
 ```python
 hits = cv.expect_all("Name", "Email", timeout=10.0)
+```
+
+### expect_display(search, interval=1.0, timeout=-1.0, threshold=0.8, display_indices=None)
+
+Keeps scanning displays until the text/image is found, and returns that display index.
+Returns `-1` when `timeout` is reached.
+
+```python
+idx = cv.expect_display(cv.load("save_icon.png"), timeout=15.0, interval=0.2)
+if idx == -1:
+	print("Not found in time")
 ```
 
 ### wait(seconds)
@@ -197,14 +380,15 @@ Moves mouse.
 
 - relative=False: pos is display-local coordinate
 - relative=True: pos is delta from current position
-- pos can be Point, Rect, or (x, y)
-- when pos is Rect, CHIVEL moves to rect center
+- pos can be Point, Rect, Match, or (x, y)
+- when pos is Rect or Match, CHIVEL moves to center of its rect
 
 ```python
 cv.mouse_move((200, 150))
 cv.mouse_move((20, -10), relative=True)
 cv.mouse_move((100, 100), display_index=0)
 cv.mouse_move(cv.Rect(300, 200, 120, 40))  # moves to center
+cv.mouse_move(cv.Match(cv.Rect(300, 200, 120, 40)))  # moves to center
 ```
 
 ### Rect.center()

@@ -1,7 +1,10 @@
 from .constants import *
 from .core import Color, Image, Match, Point, Rect
 from .capture import DISPLAY_COUNT, capture, display_get_rect, get_primary_display, set_primary_display
-from .find import expect_all, expect_any, find_all, find_any, find_image, find_text, wait
+from .find import expect_all, expect_any, expect_display, find_all, find_any, find_display, find_image, find_text, wait
+from .elements import ImageElement, RegionElement, ScreenElement, ShapeElement, TextElement, find_element
+from .shapes import ShapeTemplate, find_shape, find_shapes, get_shape_template, shape_template
+from .overlay import ScreenOverlay, overlay
 from .input import (
     copy,
     cut,
@@ -55,10 +58,25 @@ __all__ = [
     "capture",
     "find_image",
     "find_text",
+    "find_shape",
+    "find_shapes",
+    "shape_template",
+    "get_shape_template",
+    "find_element",
     "find_any",
     "find_all",
+    "find_display",
     "expect_any",
     "expect_all",
+    "expect_display",
+    "ScreenElement",
+    "TextElement",
+    "ImageElement",
+    "RegionElement",
+    "ShapeElement",
+    "ShapeTemplate",
+    "ScreenOverlay",
+    "overlay",
     "wait",
     "mouse_move",
     "mouse_click",

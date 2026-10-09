@@ -1,5 +1,14 @@
 # Change log
 
+## 0.9.0
+- Add screen elements: `ScreenElement`, `TextElement`, `ImageElement`, and `RegionElement`.
+- Add element actions for `find`, `expect`, `move`, `click`, and `drag_to`.
+- Add `find_element()` helper for quick one-off element lookups.
+- Add real-time click-through screen overlay drawing with `ScreenOverlay` / `overlay()`.
+- Add shape detection with built-ins (`rectangle`, `circle`, `x`, `star`) and custom templates via `shape_template()`.
+- Add `ShapeElement` so shape matches can be used with element actions.
+- Add cross-display search helpers `find_display()` and `expect_display()` for text/image lookup that returns display index.
+
 ## 0.8.5
 - Add a global abort failsafe with `set_abort_key()` / `clear_abort_key()`.
 - Default abort combo is Escape, with support for disabling it via `None`.
