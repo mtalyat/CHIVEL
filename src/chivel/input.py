@@ -387,6 +387,22 @@ def mouse_click(button: int = BUTTON_LEFT, count: int = 1, delay: Optional[float
         on_mouse_click.fire(button, button)
 
 
+def mouse_drag(
+    pos: Any,
+    button: int = BUTTON_LEFT,
+    display_index: Optional[int] = None,
+    relative: bool = False,
+    hold: float = 0.0,
+) -> None:
+    mouse_down(button)
+    try:
+        if hold > 0:
+            time.sleep(hold)
+        mouse_move(pos, display_index=display_index, relative=relative)
+    finally:
+        mouse_up(button)
+
+
 def mouse_down(button: int = BUTTON_LEFT) -> None:
     _mouse.press(_btn(button))
     on_mouse_down.fire(button, button)
@@ -481,19 +497,28 @@ def key_click(keys: Union[int, Sequence[int]], count: int = 1, delay: Optional[f
             on_key_click.fire(key, key)
 
 
-def copy() -> None:
-    """Trigger the standard copy shortcut."""
+def copy(text: Optional[str] = None) -> str:
+    """Trigger copy and return clipboard text. Optionally set clipboard text first."""
+    if text is not None:
+        set_clipboard(text)
     key_click([KEY_CTRL, KEY_C])
+    return get_clipboard()
 
 
-def cut() -> None:
-    """Trigger the standard cut shortcut."""
+def cut(text: Optional[str] = None) -> str:
+    """Trigger cut and return clipboard text. Optionally set clipboard text first."""
+    if text is not None:
+        set_clipboard(text)
     key_click([KEY_CTRL, KEY_X])
+    return get_clipboard()
 
 
-def paste() -> None:
-    """Trigger the standard paste shortcut."""
+def paste(text: Optional[str] = None) -> str:
+    """Trigger paste, optionally setting clipboard text first, and return clipboard text."""
+    if text is not None:
+        set_clipboard(text)
     key_click([KEY_CTRL, KEY_V])
+    return get_clipboard()
 
 
 def select_all() -> None:

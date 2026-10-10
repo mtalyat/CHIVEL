@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import re
-import time
 from typing import List, Optional, Pattern, Sequence, Tuple, Union
 
 from .capture import capture, get_primary_display
@@ -9,7 +8,7 @@ from .constants import BUTTON_LEFT
 from .core import Image, Match, Point, Rect
 from .find import find_image, find_text
 from .shapes import ShapeTemplate, find_shape
-from .input import _check_abort_key, mouse_click, mouse_down, mouse_move, mouse_up
+from .input import _check_abort_key, mouse_click, mouse_drag, mouse_move
 
 TextSearch = Union[str, Pattern[str]]
 PointLike = Union[Point, Rect, Tuple[int, int], Sequence[int]]
@@ -146,13 +145,7 @@ class ScreenElement:
             target_display_index = self._resolve_display_index()
 
         mouse_move((source_point.x, source_point.y), display_index=self._resolve_display_index())
-        mouse_down(button)
-        try:
-            if hold > 0:
-                time.sleep(hold)
-            mouse_move((target_point.x, target_point.y), display_index=target_display_index)
-        finally:
-            mouse_up(button)
+        mouse_drag((target_point.x, target_point.y), button=button, display_index=target_display_index, hold=hold)
         return True
 
 

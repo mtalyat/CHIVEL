@@ -18,7 +18,7 @@ It is designed for practical desktop automation and test scripting.
 ## Install
 
 ```bash
-pip install chivel==0.9.0
+pip install chivel==0.9.1
 ```
 
 ## Quick Start
@@ -413,6 +413,16 @@ cv.mouse_click(cv.BUTTON_RIGHT)
 cv.mouse_click(count=2)  # uses default 0.1 delay
 ```
 
+### mouse_drag(pos, button=BUTTON_LEFT, display_index=None, relative=False, hold=0.0)
+
+Presses a button, moves the cursor, then releases the button.
+
+```python
+cv.mouse_drag((400, 300))
+cv.mouse_drag((20, 0), relative=True)  # drag 20px right from current position
+cv.mouse_drag((100, 120), button=cv.BUTTON_RIGHT, display_index=0, hold=0.1)
+```
+
 ### mouse_down(button=BUTTON_LEFT)
 
 ```python
@@ -523,6 +533,37 @@ Sets the clipboard text to the given string.
 
 ```python
 cv.set_clipboard("Hello from CHIVEL!")
+```
+
+### copy(text=None)
+
+Triggers Ctrl+C and returns the current clipboard text.
+If `text` is provided, CHIVEL sets the clipboard to that value before sending Ctrl+C.
+
+```python
+copied = cv.copy()
+copied = cv.copy("seed clipboard before copy")
+```
+
+### cut(text=None)
+
+Triggers Ctrl+X and returns the current clipboard text.
+If `text` is provided, CHIVEL sets the clipboard to that value before sending Ctrl+X.
+
+```python
+cut_text = cv.cut()
+cut_text = cv.cut("seed clipboard before cut")
+```
+
+### paste(text=None)
+
+Triggers Ctrl+V and returns the current clipboard text.
+If `text` is provided, CHIVEL sets the clipboard to that value before sending Ctrl+V.
+If `text` is `None`, CHIVEL does not set the clipboard.
+
+```python
+cv.paste()  # uses existing clipboard contents
+cv.paste("Hello from CHIVEL!")
 ```
 
 ### check_for(keys_or_buttons)

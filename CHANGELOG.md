@@ -1,5 +1,11 @@
 # Change log
 
+## 0.9.1
+- Add `mouse_drag()` helper that presses a button, moves, and releases.
+- Update `ScreenElement.drag_to()` to use `mouse_drag()` for consistent drag behavior.
+- Update `copy()`, `cut()`, and `paste()` to return clipboard text and accept optional clipboard text input.
+- `paste(None)` now keeps existing clipboard content unchanged.
+
 ## 0.9.0
 - Add screen elements: `ScreenElement`, `TextElement`, `ImageElement`, and `RegionElement`.
 - Add element actions for `find`, `expect`, `move`, `click`, and `drag_to`.
